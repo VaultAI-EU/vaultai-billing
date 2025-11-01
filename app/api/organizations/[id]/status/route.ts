@@ -12,9 +12,11 @@ import Stripe from "stripe";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json(
@@ -33,7 +35,7 @@ export async function GET(
       );
     }
 
-    if (org.id !== params.id) {
+    if (org.id !== id) {
       return NextResponse.json(
         { error: "Organization ID mismatch" },
         { status: 403 }
