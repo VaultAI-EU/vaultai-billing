@@ -1,36 +1,221 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VaultAI Billing Service
 
-## Getting Started
+Service de gestion de facturation pour VaultAI on-premise et managed-cloud utilisant Stripe Usage-Based Billing.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+┌─────────────────┐
+│ VaultAI Instance│ (on-premise ou managed-cloud)
+│                 │
+│ - Cron quotidien│
+│ - POST /api/    │
+│   meter-events  │
+└────────┬────────┘
+         │
+         │ HTTPS (sortant)
+         ▼
+┌─────────────────┐
+│billing.vaultai.eu│
+│                 │
+│ - API Routes    │
+│ - Stripe API    │
+│ - DB PostgreSQL │
+└────────┬────────┘
+         │
+         │ Stripe API
+         ▼
+┌─────────────────┐
+│   Stripe        │
+│   - Meter Events│
+│   - Subscriptions│
+│   - Invoices    │
+└─────────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Installer les dépendances**
+   ```bash
+   pnpm install
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Configurer les variables d'environnement**
+   ```bash
+   cp .env.example .env
+   # Remplir les variables dans .env
+   ```
 
-## Learn More
+3. **Configurer la base de données**
+   ```bash
+   # Créer la base de données PostgreSQL
+   createdb billing
 
-To learn more about Next.js, take a look at the following resources:
+   # Appliquer les migrations
+   pnpm db:migrate
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **Setup Stripe (une seule fois)**
+   ```bash
+   pnpm setup:stripe
+   ```
+   Ce script crée :
+   - Le meter Stripe pour tracker les users actifs
+   - Les products et prices (Managed Cloud et Self-Hosted, monthly et yearly)
+   
+   Copier les Price IDs dans votre `.env` après l'exécution.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. **Configurer le webhook Stripe**
+   - Aller dans Stripe Dashboard → Webhooks
+   - Ajouter endpoint : `https://billing.vaultai.eu/api/stripe/webhook`
+   - Sélectionner les événements :
+     - `customer.subscription.created`
+     - `customer.subscription.updated`
+     - `customer.subscription.deleted`
+     - `invoice.payment_failed`
+     - `invoice.payment_succeeded`
+   - Copier le webhook secret dans `.env` → `STRIPE_WEBHOOK_SECRET`
 
-## Deploy on Vercel
+## Routes API
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### POST `/api/meter-events`
+Reçoit les rapports d'usage quotidiens depuis les instances VaultAI.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Headers:**
+- `Authorization: Bearer <billing_token>`
+
+**Body:**
+```json
+{
+  "organization_id": "uuid",
+  "user_count": 15,
+  "deployment_type": "on-premise",
+  "timestamp": "2025-01-15T10:00:00Z"
+}
+```
+
+### POST `/api/organizations/register`
+Enregistre une nouvelle organisation et crée un customer Stripe avec subscription en période d'essai (4 jours).
+
+**Body:**
+```json
+{
+  "organization_id": "uuid",
+  "organization_name": "ACME Corp",
+  "email": "admin@acme.com",
+  "deployment_type": "on-premise",
+  "plan_type": "managed-cloud"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "organization_id": "uuid",
+  "billing_token": "vaultai_xxx",
+  "stripe_customer_id": "cus_xxx",
+  "stripe_subscription_id": "sub_xxx",
+  "trial_end": "2025-01-19T10:00:00Z"
+}
+```
+
+### GET `/api/organizations/:id/status`
+Retourne le statut de la subscription pour une organisation.
+
+**Headers:**
+- `Authorization: Bearer <billing_token>`
+
+**Response:**
+```json
+{
+  "organization_id": "uuid",
+  "organization_name": "ACME Corp",
+  "subscription_status": "active",
+  "trial_active": false,
+  "trial_end": null,
+  "plan_type": "managed-cloud",
+  "deployment_type": "on-premise",
+  "stripe_subscription": {
+    "status": "active",
+    "current_period_start": "2025-01-15T00:00:00Z",
+    "current_period_end": "2025-02-15T00:00:00Z"
+  }
+}
+```
+
+### POST `/api/stripe/webhook`
+Webhook Stripe pour synchroniser les changements de subscription (géré automatiquement par Stripe).
+
+## Déploiement
+
+### Variables d'environnement requises
+
+```bash
+# Stripe
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Stripe Price IDs (générés par setup:stripe)
+STRIPE_PRICE_MANAGED_MONTHLY=price_xxx
+STRIPE_PRICE_MANAGED_YEARLY=price_xxx
+STRIPE_PRICE_SELF_HOSTED_MONTHLY=price_xxx
+STRIPE_PRICE_SELF_HOSTED_YEARLY=price_xxx
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/billing
+
+# Next.js
+NEXT_PUBLIC_APP_URL=https://billing.vaultai.eu
+```
+
+### Build et déploiement
+
+```bash
+pnpm build
+pnpm start
+```
+
+## Côté VaultAI (Instance Client)
+
+### Configuration
+
+Ajouter dans `.env.production` :
+```bash
+BILLING_API_URL=https://billing.vaultai.eu
+CRON_SECRET=votre_secret_securise
+```
+
+### Migration de base de données
+
+Ajouter les champs suivants à la table `Organization` :
+- `billing_token` (text, nullable)
+- `deployment_type` (varchar(20), default: "on-premise")
+
+### Cron Job
+
+Ajouter un cron job quotidien pour reporter l'usage :
+
+```bash
+# Tous les jours à 2h00
+0 2 * * * curl -X POST https://votre-domaine/api/cron/report-usage \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Ou utiliser le service cron existant dans docker-compose.
+
+## Fonctionnement
+
+1. **Premier admin se connecte** → Création automatique de l'organisation
+2. **Enregistrement billing** → Appel automatique à `/api/organizations/register`
+3. **Subscription Stripe** → Créée avec période d'essai de 4 jours
+4. **Rapport quotidien** → Cron job envoie `user_count` chaque jour
+5. **Facturation automatique** → Stripe agrège et facture mensuellement
+6. **Webhooks Stripe** → Synchronisent les changements de statut
+
+## Notes
+
+- Pas de hard limits : les clients peuvent ajouter/retirer des users librement
+- Facturation basée sur l'usage réel : Stripe facture automatiquement
+- Période d'essai : 4 jours gratuits, puis facturation normale
+- Compatible firewall/VPN : toutes les communications sont sortantes depuis les instances
