@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "vaultai-billing",
+  "buildCommand": "pnpm build",
+  "devCommand": "pnpm dev",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "regions": ["fra1"]
+}
+
