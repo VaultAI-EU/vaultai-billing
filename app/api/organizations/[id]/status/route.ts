@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateOrganization } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/config";
+import { db, organizations } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 import Stripe from "stripe";
@@ -17,28 +18,26 @@ export async function GET(
   try {
     const { id } = await params;
     
+    // Vérifier l'authentification avec le token universel
     const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authenticateRequest(authHeader)) {
       return NextResponse.json(
-        { error: "Missing or invalid authorization header" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const billingToken = authHeader.replace("Bearer ", "");
-    const org = await authenticateOrganization(billingToken);
+    // Récupérer l'organisation depuis la DB
+    const [org] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, id))
+      .limit(1);
 
     if (!org) {
       return NextResponse.json(
-        { error: "Invalid billing token" },
-        { status: 401 }
-      );
-    }
-
-    if (org.id !== id) {
-      return NextResponse.json(
-        { error: "Organization ID mismatch" },
-        { status: 403 }
+        { error: "Organization not found" },
+        { status: 404 }
       );
     }
 

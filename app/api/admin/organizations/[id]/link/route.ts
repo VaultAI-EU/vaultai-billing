@@ -7,10 +7,10 @@ import { stripe, STRIPE_PRICES } from "@/lib/stripe";
 
 /**
  * POST /api/admin/organizations/[id]/link
- * 
+ *
  * Lie manuellement une organisation à un customer Stripe
  * et crée une subscription
- * 
+ *
  * Body:
  * {
  *   admin_email: string,
@@ -30,10 +30,7 @@ export async function POST(
     });
 
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Récupérer l'utilisateur depuis la DB pour obtenir le rôle
@@ -52,17 +49,15 @@ export async function POST(
 
     const { id: organizationId } = await params;
     const body = await request.json();
-    const {
-      admin_email,
-      deployment_type,
-      plan_type,
-      trial_days = 4,
-    } = body;
+    const { admin_email, deployment_type, plan_type, trial_days = 4 } = body;
 
     // Validation
     if (!admin_email || !deployment_type || !plan_type) {
       return NextResponse.json(
-        { error: "Missing required fields: admin_email, deployment_type, plan_type" },
+        {
+          error:
+            "Missing required fields: admin_email, deployment_type, plan_type",
+        },
         { status: 400 }
       );
     }
@@ -84,7 +79,7 @@ export async function POST(
     // Vérifier si déjà lié
     if (org.stripe_customer_id) {
       return NextResponse.json(
-        { 
+        {
           error: "Organization already linked to Stripe",
           stripe_customer_id: org.stripe_customer_id,
         },
@@ -149,7 +144,9 @@ export async function POST(
       .where(eq(organizations.id, organizationId))
       .returning();
 
-    console.log(`[Admin] ✅ Organization ${org.name} successfully linked to Stripe`);
+    console.log(
+      `[Admin] ✅ Organization ${org.name} successfully linked to Stripe`
+    );
 
     return NextResponse.json({
       success: true,
@@ -166,12 +163,11 @@ export async function POST(
   } catch (error) {
     console.error("[Admin] Error linking organization:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error"
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
   }
 }
-

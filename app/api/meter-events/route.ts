@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateOrganization } from "@/lib/auth";
-import { db, usageReports } from "@/lib/db";
+import { authenticateRequest } from "@/lib/config";
+import { db, organizations, usageReports } from "@/lib/db";
 import { stripe, METER_EVENT_NAME } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 
@@ -12,20 +12,11 @@ import { eq } from "drizzle-orm";
  */
 export async function POST(request: NextRequest) {
   try {
+    // Vérifier l'authentification avec le token universel
     const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authenticateRequest(authHeader)) {
       return NextResponse.json(
-        { error: "Missing or invalid authorization header" },
-        { status: 401 }
-      );
-    }
-
-    const billingToken = authHeader.replace("Bearer ", "");
-    const org = await authenticateOrganization(billingToken);
-
-    if (!org) {
-      return NextResponse.json(
-        { error: "Invalid billing token" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
@@ -41,10 +32,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (org.id !== organization_id) {
+    // Récupérer l'organisation depuis la DB
+    const [org] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, organization_id))
+      .limit(1);
+
+    if (!org) {
       return NextResponse.json(
-        { error: "Organization ID mismatch" },
-        { status: 403 }
+        { error: "Organization not found" },
+        { status: 404 }
       );
     }
 
