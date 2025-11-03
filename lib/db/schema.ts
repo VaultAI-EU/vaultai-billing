@@ -74,20 +74,27 @@ export const verification = pgTable("verification", {
 });
 
 // Table pour stocker les organisations et leurs informations Stripe
+// Architecture simplifiée: pas de billing_token, le deployment_type est géré uniquement ici
 export const organizations = pgTable("organizations", {
-  id: uuid("id").primaryKey().notNull(),
+  id: uuid("id").primaryKey().notNull(), // organization_id depuis VaultAI
   name: text("name").notNull(),
-  billing_token: text("billing_token").notNull().unique(), // Token unique pour authentification
+  instance_url: text("instance_url"), // URL de l'instance VaultAI (ex: dev.vaultai.eu)
+  
+  // Informations Stripe (NULL si pas encore lié manuellement)
   stripe_customer_id: text("stripe_customer_id").unique(),
   stripe_subscription_id: text("stripe_subscription_id").unique(),
-  deployment_type: varchar("deployment_type", { length: 20 })
-    .notNull()
-    .default("on-premise"), // "on-premise" | "managed-cloud"
-  plan_type: varchar("plan_type", { length: 20 }), // "managed-cloud" | "self-hosted"
+  
+  // Configuration du plan (définie manuellement par l'admin billing)
+  deployment_type: varchar("deployment_type", { length: 20 }), // "on-premise" | "managed-cloud" (NULL si pas encore défini)
+  plan_type: varchar("plan_type", { length: 20 }), // "managed-cloud" | "self-hosted" (NULL si pas encore défini)
   subscription_status: varchar("subscription_status", { length: 20 }).default(
-    "trial"
-  ), // "trial" | "active" | "past_due" | "canceled"
+    "pending"
+  ), // "pending" | "trial" | "active" | "past_due" | "canceled"
   trial_end: timestamp("trial_end"),
+  
+  // Contact
+  admin_email: text("admin_email"), // Email admin pour facturation
+  
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
