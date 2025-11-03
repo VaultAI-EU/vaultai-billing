@@ -1,16 +1,26 @@
+"use client";
+
+import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
 export default function Home() {
+  const { data: session } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (session?.user) {
+      router.push("/dashboard");
+    } else {
+      router.push("/login");
+    }
+  }, [session, router]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              VaultAI Billing Service
-            </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
-              Service de gestion de facturation pour VaultAI
-            </p>
-          </div>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-600 dark:text-gray-400">Redirection...</div>
+    </div>
+  );
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 mb-8">
             <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">

@@ -6,6 +6,66 @@ async function migrate() {
   console.log("🚀 Starting database migration...");
 
   try {
+    // Créer les tables Better Auth
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "user" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        name TEXT,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        email_verified BOOLEAN DEFAULT false NOT NULL,
+        image TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        role VARCHAR(20) DEFAULT 'admin' NOT NULL
+      );
+    `);
+    console.log("✅ Table 'user' created");
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS session (
+        id TEXT PRIMARY KEY,
+        expires_at TIMESTAMP NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        ip_address TEXT,
+        user_agent TEXT,
+        user_id UUID NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    console.log("✅ Table 'session' created");
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS account (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        account_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        user_id UUID NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+        access_token TEXT,
+        refresh_token TEXT,
+        id_token TEXT,
+        access_token_expires_at TIMESTAMP,
+        refresh_token_expires_at TIMESTAMP,
+        scope TEXT,
+        password TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    console.log("✅ Table 'account' created");
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS verification (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        identifier TEXT NOT NULL,
+        value TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log("✅ Table 'verification' created");
+
     // Créer la table organizations
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS organizations (
@@ -38,6 +98,18 @@ async function migrate() {
     console.log("✅ Table 'usage_reports' created");
 
     // Créer les index
+    // Créer les index pour Better Auth
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_user_id ON session(user_id);
+    `);
+    console.log("✅ Index 'idx_session_user_id' created");
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_account_user_id ON account(user_id);
+    `);
+    console.log("✅ Index 'idx_account_user_id' created");
+
+    // Créer les index pour organizations
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS idx_organizations_billing_token 
       ON organizations(billing_token);
