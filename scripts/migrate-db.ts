@@ -17,7 +17,7 @@ async function migrate() {
   console.log("🚀 Starting database migration...");
 
   try {
-    // Créer les tables Better Auth
+    // Créer les tables Better Auth avec snake_case en DB
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "user" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

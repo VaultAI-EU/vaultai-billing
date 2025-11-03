@@ -46,37 +46,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Utiliser Better Auth pour créer l'utilisateur (gère le hash correctement)
-    const signUpResult = await auth.api.signUpEmail({
-      body: {
+    // Appeler directement l'endpoint Better Auth pour créer l'utilisateur
+    const baseURL = process.env.BETTER_AUTH_URL || "http://localhost:3001";
+    const signUpUrl = `${baseURL}/api/auth/sign-up/email`;
+    
+    const signUpResponse = await fetch(signUpUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Origin": baseURL,
+      },
+      body: JSON.stringify({
         email,
         password,
         name: name || "Admin",
-      },
+      }),
     });
 
-    if (signUpResult.error) {
+    const signUpData = await signUpResponse.json();
+
+    if (!signUpResponse.ok || signUpData.error) {
       return NextResponse.json(
-        { error: signUpResult.error.message || "Failed to create user" },
-        { status: 400 }
+        { error: signUpData.error?.message || "Failed to create user", details: signUpData },
+        { status: signUpResponse.status || 400 }
       );
     }
 
     // Mettre à jour le rôle en admin après création
-    if (signUpResult.data?.user?.id) {
+    if (signUpData.user?.id) {
       await db
         .update(user)
         .set({ role: "admin", emailVerified: true })
-        .where(eq(user.id, signUpResult.data.user.id));
+        .where(eq(user.id, signUpData.user.id));
     }
 
     return NextResponse.json({
       success: true,
       message: "Admin user created successfully",
       user: {
-        id: signUpResult.data?.user?.id,
-        email: signUpResult.data?.user?.email,
-        name: signUpResult.data?.user?.name,
+        id: signUpData.user?.id,
+        email: signUpData.user?.email,
+        name: signUpData.user?.name,
       },
     });
   } catch (error) {
