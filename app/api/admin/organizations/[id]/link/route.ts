@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db, organizations } from "@/lib/db";
+import { db, organizations, user } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { stripe, STRIPE_PRICES } from "@/lib/stripe";
 
@@ -29,7 +29,21 @@ export async function POST(
       headers: await headers(),
     });
 
-    if (!session?.user || session.user.role !== "admin") {
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Récupérer l'utilisateur depuis la DB pour obtenir le rôle
+    const [dbUser] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
+
+    if (!dbUser || dbUser.role !== "admin") {
       return NextResponse.json(
         { error: "Unauthorized - Admin only" },
         { status: 403 }
