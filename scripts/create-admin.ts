@@ -1,74 +1,81 @@
 import { config } from "dotenv";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { user, account } from "@/lib/db/schema";
-import { hash } from "bcrypt-ts";
-import { eq } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 
 // Charger les variables d'environnement
 config({ path: ".env.local" });
-
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set");
-}
-
-const client = postgres(process.env.DATABASE_URL);
-const db = drizzle(client);
 
 async function createAdminUser() {
   const email = "hello@vaultai.eu";
   const password = "hugoDO1967!";
   const name = "Admin VaultAI";
 
-  console.log("🔐 Creating admin user...");
+  console.log("🔐 Creating admin user via Better Auth API...");
 
   try {
-    // Vérifier si l'utilisateur existe déjà
-    const [existingUser] = await db
-      .select()
-      .from(user)
-      .where(eq(user.email, email))
-      .limit(1);
-
-    if (existingUser) {
-      console.log("⚠️  User already exists:", email);
-      return;
-    }
-
-    // Hasher le mot de passe
-    const hashedPassword = await hash(password, 10);
-    console.log("✅ Password hashed");
-
-    // Créer l'utilisateur
-    const [newUser] = await db
-      .insert(user)
-      .values({
+    // Utiliser l'API Better Auth pour créer l'utilisateur
+    // Cela garantit que le hash de mot de passe est au bon format
+    const result = await auth.api.signUpEmail({
+      body: {
         email,
+        password,
         name,
-        emailVerified: true,
-        role: "admin",
-      })
-      .returning();
-
-    console.log("✅ User created:", newUser.id);
-
-    // Créer le compte avec le mot de passe
-    await db.insert(account).values({
-      accountId: email,
-      providerId: "credential",
-      userId: newUser.id,
-      password: hashedPassword,
+      },
     });
 
-    console.log("✅ Account created with password");
+    if (result.error) {
+      if (result.error.message?.includes("already exists") || result.error.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
+        console.log("⚠️  User already exists, updating role to admin...");
+        
+        // Récupérer l'utilisateur existant et mettre à jour le rôle
+        const { db } = await import("@/lib/db");
+        const { user } = await import("@/lib/db/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        const [existingUser] = await db
+          .select()
+          .from(user)
+          .where(eq(user.email, email))
+          .limit(1);
+        
+        if (existingUser) {
+          await db
+            .update(user)
+            .set({ role: "admin" })
+            .where(eq(user.id, existingUser.id));
+          
+          console.log("✅ Role updated to admin");
+          console.log("\n🎉 Admin user ready!");
+          console.log(`   Email: ${email}`);
+          console.log(`   Password: ${password}`);
+          process.exit(0);
+          return;
+        }
+      }
+      throw new Error(result.error.message || "Failed to create user");
+    }
+
+    console.log("✅ User created:", result.data?.user?.id);
     console.log("\n🎉 Admin user created successfully!");
     console.log(`   Email: ${email}`);
     console.log(`   Password: ${password}`);
-    await client.end();
+    
+    // Mettre à jour le rôle en admin après création
+    if (result.data?.user?.id) {
+      const { db } = await import("@/lib/db");
+      const { user } = await import("@/lib/db/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      await db
+        .update(user)
+        .set({ role: "admin" })
+        .where(eq(user.id, result.data.user.id));
+      
+      console.log("✅ Role set to admin");
+    }
+    
     process.exit(0);
   } catch (error) {
     console.error("❌ Error creating admin user:", error);
-    await client.end();
     process.exit(1);
   }
 }

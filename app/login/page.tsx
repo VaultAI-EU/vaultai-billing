@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { signIn, signUp, useSession } from "@/lib/auth-client";
+import { signIn, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -26,30 +24,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const result = await signUp.email({
-          email,
-          password,
-          name: name || email,
-        });
+      const result = await signIn.email({
+        email,
+        password,
+      });
 
-        if (result.error) {
-          setError(result.error.message || "Erreur d'inscription");
-        } else {
-          // Après inscription, mettre à jour le rôle en admin
-          router.push("/dashboard");
-        }
+      if (result.error) {
+        setError(result.error.message || "Erreur de connexion");
       } else {
-        const result = await signIn.email({
-          email,
-          password,
-        });
-
-        if (result.error) {
-          setError(result.error.message || "Erreur de connexion");
-        } else {
-          router.push("/dashboard");
-        }
+        router.push("/dashboard");
       }
     } catch (err) {
       setError("Une erreur est survenue");
@@ -113,47 +96,12 @@ export default function LoginPage() {
             />
           </div>
 
-          {isSignUp && (
-            <div>
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Nom
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                placeholder="Votre nom"
-              />
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading
-              ? isSignUp
-                ? "Inscription..."
-                : "Connexion..."
-              : isSignUp
-                ? "S'inscrire"
-                : "Se connecter"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2"
-          >
-            {isSignUp
-              ? "Déjà un compte ? Se connecter"
-              : "Pas de compte ? S'inscrire"}
+            {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
       </div>

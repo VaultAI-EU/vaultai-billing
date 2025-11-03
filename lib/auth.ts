@@ -14,11 +14,8 @@ export const auth = betterAuth({
       verification: schema.verification,
     },
   }),
-  advanced: {
-    database: {
-      generateId: false,
-    },
-  },
+  // Better Auth génère les IDs automatiquement pour session et account
+  // Pas besoin de generateId: false
   user: {
     fields: {
       createdAt: "created_at",
@@ -27,6 +24,8 @@ export const auth = betterAuth({
       image: "image",
     },
   },
+  // Note: Better Auth utilise directement les noms de propriétés du schéma Drizzle
+  // pour session, account et verification. Pas besoin de mapping explicite.
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false, // Pour simplifier l'accès admin
