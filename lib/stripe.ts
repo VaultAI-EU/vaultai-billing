@@ -10,7 +10,7 @@ export function getStripe(): Stripe {
       throw new Error("STRIPE_SECRET_KEY is not set");
     }
     stripeInstance = new Stripe(secretKey, {
-      apiVersion: "2025-10-29.clover",
+      apiVersion: "2024-10-28.acacia",
     });
   }
   return stripeInstance;

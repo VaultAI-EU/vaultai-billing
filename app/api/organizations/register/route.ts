@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 
 /**
  * POST /api/organizations/register
- * 
+ *
  * Enregistre une nouvelle organisation et crée un customer Stripe
  * avec une subscription en période d'essai (4 jours)
  */
@@ -23,7 +23,10 @@ export async function POST(request: NextRequest) {
 
     if (!organization_id || !organization_name || !email) {
       return NextResponse.json(
-        { error: "Missing required fields: organization_id, organization_name, email" },
+        {
+          error:
+            "Missing required fields: organization_id, organization_name, email",
+        },
         { status: 400 }
       );
     }
@@ -114,4 +117,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
