@@ -10,56 +10,56 @@ import {
 import { relations } from "drizzle-orm";
 
 // Tables Better Auth pour l'authentification des administrateurs
-// Note: Les noms de colonnes en DB sont en snake_case
+// Note: Les noms de propriétés sont en camelCase pour Better Auth, mais les colonnes DB sont en snake_case
 export const user = pgTable("user", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   name: text("name"),
   email: varchar("email", { length: 255 }).notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(), // snake_case en DB
+  emailVerified: boolean("email_verified").default(false).notNull(), // camelCase pour Better Auth, snake_case en DB
   image: text("image"),
-  createdAt: timestamp("created_at").defaultNow().notNull(), // snake_case en DB
-  updatedAt: timestamp("updated_at").defaultNow().notNull(), // snake_case en DB
+  createdAt: timestamp("created_at").defaultNow().notNull(), // camelCase pour Better Auth, snake_case en DB
+  updatedAt: timestamp("updated_at").defaultNow().notNull(), // camelCase pour Better Auth, snake_case en DB
   role: varchar("role", { length: 20 }).default("admin").notNull(), // "admin" | "viewer"
 });
 
 export const session = pgTable("session", {
-  id: text("id").primaryKey(),
-  expiresAt: timestamp("expires_at").notNull(), // snake_case en DB
+  id: uuid("id").primaryKey().defaultRandom(), // UUID comme dans vaultai_v2
+  expiresAt: timestamp("expires_at").notNull(), // camelCase pour Better Auth
   token: text("token").notNull().unique(),
-  ipAddress: text("ip_address"), // snake_case en DB
-  userAgent: text("user_agent"), // snake_case en DB
-  userId: uuid("user_id") // snake_case en DB
+  ipAddress: text("ip_address"), // camelCase pour Better Auth
+  userAgent: text("user_agent"), // camelCase pour Better Auth
+  userId: uuid("user_id") // camelCase pour Better Auth
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow().notNull(), // snake_case en DB
-  updatedAt: timestamp("updated_at").defaultNow().notNull(), // snake_case en DB
+  createdAt: timestamp("created_at").defaultNow().notNull(), // camelCase pour Better Auth
+  updatedAt: timestamp("updated_at").defaultNow().notNull(), // camelCase pour Better Auth
 });
 
 export const account = pgTable("account", {
   id: uuid("id").primaryKey().defaultRandom(),
-  accountId: text("account_id").notNull(), // snake_case en DB
-  providerId: text("provider_id").notNull(), // snake_case en DB
-  userId: uuid("user_id") // snake_case en DB
+  accountId: text("account_id").notNull(), // camelCase pour Better Auth
+  providerId: text("provider_id").notNull(), // camelCase pour Better Auth
+  userId: uuid("user_id") // camelCase pour Better Auth
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  accessToken: text("access_token"), // snake_case en DB
-  refreshToken: text("refresh_token"), // snake_case en DB
-  idToken: text("id_token"), // snake_case en DB
-  accessTokenExpiresAt: timestamp("access_token_expires_at"), // snake_case en DB
-  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"), // snake_case en DB
+  accessToken: text("access_token"), // camelCase pour Better Auth
+  refreshToken: text("refresh_token"), // camelCase pour Better Auth
+  idToken: text("id_token"), // camelCase pour Better Auth
+  accessTokenExpiresAt: timestamp("access_token_expires_at"), // camelCase pour Better Auth
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"), // camelCase pour Better Auth
   scope: text("scope"),
   password: text("password"),
-  createdAt: timestamp("created_at").defaultNow().notNull(), // snake_case en DB
-  updatedAt: timestamp("updated_at").defaultNow().notNull(), // snake_case en DB
+  createdAt: timestamp("created_at").defaultNow().notNull(), // camelCase pour Better Auth
+  updatedAt: timestamp("updated_at").defaultNow().notNull(), // camelCase pour Better Auth
 });
 
 export const verification = pgTable("verification", {
   id: uuid("id").primaryKey().defaultRandom(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
-  expiresAt: timestamp("expires_at").notNull(), // snake_case en DB
-  createdAt: timestamp("created_at").defaultNow(), // snake_case en DB
-  updatedAt: timestamp("updated_at").defaultNow(), // snake_case en DB
+  expiresAt: timestamp("expires_at").notNull(), // camelCase pour Better Auth
+  createdAt: timestamp("created_at").defaultNow(), // camelCase pour Better Auth
+  updatedAt: timestamp("updated_at").defaultNow(), // camelCase pour Better Auth
 });
 
 // Table pour stocker les organisations et leurs informations Stripe

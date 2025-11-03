@@ -34,7 +34,7 @@ async function migrate() {
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS session (
-        id TEXT PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         expires_at TIMESTAMP NOT NULL,
         token TEXT NOT NULL UNIQUE,
         ip_address TEXT,
