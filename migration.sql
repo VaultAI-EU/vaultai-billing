@@ -83,5 +83,5 @@ CREATE INDEX IF NOT EXISTS idx_usage_reports_organization_id ON usage_reports(or
 CREATE INDEX IF NOT EXISTS idx_usage_reports_reported_at ON usage_reports(reported_at);
 
 -- Créer l'utilisateur admin
--- Note: Le mot de passe doit être hashé avec bcrypt. Utilisez le script create-admin.ts ou Better Auth API pour créer l'utilisateur.
+-- Note: Le mot de passe doit être hashé avec bcrypt. Utilisez Better Auth API (page de login) pour créer l'utilisateur.
 

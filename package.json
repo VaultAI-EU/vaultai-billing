@@ -12,7 +12,6 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "setup:stripe": "tsx scripts/setup-stripe.ts",
-    "create:admin": "tsx scripts/create-admin.ts",
     "delete:user": "tsx scripts/delete-user.ts"
   },
   "dependencies": {

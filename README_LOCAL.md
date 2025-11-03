@@ -28,7 +28,7 @@ pnpm install
 pnpm db:migrate
 
 # Créer l'utilisateur admin (via API après démarrage du serveur)
-# POST http://localhost:3000/api/admin/create-first-user
+# Note: L'utilisateur admin doit être créé via la page de login ou directement en base de données
 # Body: {"email":"hello@vaultai.eu","password":"hugoDO1967!","name":"Admin"}
 
 # Démarrer le serveur de développement
@@ -40,7 +40,7 @@ pnpm dev
 1. Démarrer le serveur : `pnpm dev`
 2. Appeler l'endpoint API :
 ```bash
-curl -X POST http://localhost:3000/api/admin/create-first-user \
+# Pour créer un utilisateur admin, utilisez la page de login ou créez-le directement en base de données
   -H "Content-Type: application/json" \
   -d '{"email":"hello@vaultai.eu","password":"hugoDO1967!","name":"Admin VaultAI"}'
 ```
