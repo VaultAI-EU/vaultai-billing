@@ -21,7 +21,7 @@ import { stripe, STRIPE_PRICES } from "@/lib/stripe";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Vérifier l'authentification admin
@@ -36,7 +36,7 @@ export async function POST(
       );
     }
 
-    const organizationId = params.id;
+    const { id: organizationId } = await params;
     const body = await request.json();
     const {
       admin_email,
