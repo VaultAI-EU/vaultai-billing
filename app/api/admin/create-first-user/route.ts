@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { user, account } from "@/lib/db/schema";
-import { hash } from "bcrypt-ts";
+import { user } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 /**
  * POST /api/admin/create-first-user
  * 
  * Endpoint temporaire pour créer le premier utilisateur admin
- * Devrait être désactivé après la création du premier admin
+ * Utilise l'API Better Auth pour créer l'utilisateur avec le bon format de hash
  */
 export async function POST(request: NextRequest) {
   try {
@@ -46,41 +46,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await hash(password, 10);
-
-    // Créer l'utilisateur
-    const [newUser] = await db
-      .insert(user)
-      .values({
+    // Utiliser Better Auth pour créer l'utilisateur (gère le hash correctement)
+    const signUpResult = await auth.api.signUpEmail({
+      body: {
         email,
+        password,
         name: name || "Admin",
-        emailVerified: true,
-        role: "admin",
-      })
-      .returning();
-
-    // Créer le compte avec le mot de passe
-    await db.insert(account).values({
-      accountId: email,
-      providerId: "credential",
-      userId: newUser.id,
-      password: hashedPassword,
+      },
     });
+
+    if (signUpResult.error) {
+      return NextResponse.json(
+        { error: signUpResult.error.message || "Failed to create user" },
+        { status: 400 }
+      );
+    }
+
+    // Mettre à jour le rôle en admin après création
+    if (signUpResult.data?.user?.id) {
+      await db
+        .update(user)
+        .set({ role: "admin", emailVerified: true })
+        .where(eq(user.id, signUpResult.data.user.id));
+    }
 
     return NextResponse.json({
       success: true,
       message: "Admin user created successfully",
       user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
+        id: signUpResult.data?.user?.id,
+        email: signUpResult.data?.user?.email,
+        name: signUpResult.data?.user?.name,
       },
     });
   } catch (error) {
     console.error("Error creating admin user:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

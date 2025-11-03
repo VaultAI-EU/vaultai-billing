@@ -35,6 +35,7 @@ export const auth = betterAuth({
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "https://billing.vaultai.eu",
     "http://localhost:3000",
+    "http://localhost:3001", // Port alternatif si 3000 est occupé
   ],
   baseURL: process.env.BETTER_AUTH_URL || "https://billing.vaultai.eu",
   basePath: "/api/auth",
@@ -55,5 +56,7 @@ export async function authenticateOrganization(
 
 // Fonction pour générer un token unique pour une organisation
 export function generateBillingToken(): string {
-  return `vaultai_${crypto.randomUUID().replace(/-/g, "")}_${Date.now().toString(36)}`;
+  return `vaultai_${crypto
+    .randomUUID()
+    .replace(/-/g, "")}_${Date.now().toString(36)}`;
 }
