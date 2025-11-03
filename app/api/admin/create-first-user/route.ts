@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (signUpData.user?.id) {
       await db
         .update(user)
-        .set({ role: "admin", emailVerified: true })
+        .set({ role: "admin", email_verified: true })
         .where(eq(user.id, signUpData.user.id));
     }
 
