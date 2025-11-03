@@ -1,6 +1,17 @@
-import { db } from "@/lib/db";
-import { organizations, usageReports } from "@/lib/db/schema";
+import { config } from "dotenv";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { sql } from "drizzle-orm";
+
+// Charger les variables d'environnement
+config({ path: ".env.local" });
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set");
+}
+
+const client = postgres(process.env.DATABASE_URL);
+const db = drizzle(client);
 
 async function migrate() {
   console.log("🚀 Starting database migration...");
@@ -135,8 +146,11 @@ async function migrate() {
     console.log("✅ Index 'idx_usage_reports_reported_at' created");
 
     console.log("\n🎉 Migration completed successfully!");
+    await client.end();
+    process.exit(0);
   } catch (error) {
     console.error("❌ Migration failed:", error);
+    await client.end();
     process.exit(1);
   }
 }

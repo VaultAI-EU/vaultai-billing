@@ -8,11 +8,14 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit push",
+    "db:migrate": "tsx scripts/migrate-db.ts",
+    "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "setup:stripe": "tsx scripts/setup-stripe.ts"
+    "setup:stripe": "tsx scripts/setup-stripe.ts",
+    "create:admin": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
+    "bcrypt-ts": "^7.1.0",
     "better-auth": "^1.3.34",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
