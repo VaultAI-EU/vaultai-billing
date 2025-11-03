@@ -31,6 +31,7 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false, // Pour simplifier l'accès admin
   },
+  secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "https://billing.vaultai.eu",
     "http://localhost:3000",
