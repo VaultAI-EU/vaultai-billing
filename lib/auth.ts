@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -37,3 +38,21 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "https://billing.vaultai.eu",
   basePath: "/api/auth",
 });
+
+// Fonction pour authentifier les organisations (utilisée par les API routes métier)
+export async function authenticateOrganization(
+  billingToken: string
+): Promise<typeof schema.organizations.$inferSelect | null> {
+  const [org] = await db
+    .select()
+    .from(schema.organizations)
+    .where(eq(schema.organizations.billing_token, billingToken))
+    .limit(1);
+
+  return org || null;
+}
+
+// Fonction pour générer un token unique pour une organisation
+export function generateBillingToken(): string {
+  return `vaultai_${crypto.randomUUID().replace(/-/g, "")}_${Date.now().toString(36)}`;
+}

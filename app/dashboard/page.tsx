@@ -3,8 +3,6 @@
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { db, organizations, usageReports } from "@/lib/db";
-import { desc, eq } from "drizzle-orm";
 
 export default function DashboardPage() {
   const { data: session, isPending } = useSession();
