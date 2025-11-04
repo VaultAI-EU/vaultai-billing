@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
           stripe_customer_id: org.stripe_customer_id,
           stripe_subscription_id: org.stripe_subscription_id,
           deployment_type: org.deployment_type,
-          plan_type: org.plan_type,
+          billing_period: org.billing_period,
           subscription_status: org.subscription_status,
           admin_email: org.admin_email,
           created_at: org.created_at,

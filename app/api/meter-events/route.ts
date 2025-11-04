@@ -46,33 +46,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Vérifier que l'organisation a un customer Stripe
-    if (!org.stripe_customer_id) {
+    // Vérifier que l'organisation a un customer Stripe et une subscription
+    if (!org.stripe_customer_id || !org.stripe_subscription_id) {
       return NextResponse.json(
         { error: "Organization not registered with Stripe" },
         { status: 400 }
       );
     }
 
+    // Récupérer la subscription depuis Stripe pour obtenir le subscription_item_id
+    let subscriptionItemId: string | null = null;
+    try {
+      const subscription = await stripe.subscriptions.retrieve(
+        org.stripe_subscription_id
+      );
+      // Récupérer le premier subscription item (celui avec le metered price)
+      subscriptionItemId = subscription.items.data[0]?.id || null;
+      
+      if (!subscriptionItemId) {
+        console.error(
+          `[Meter Events] No subscription item found for subscription ${org.stripe_subscription_id}`
+        );
+      }
+    } catch (stripeError) {
+      console.error(
+        "[Meter Events] Error retrieving subscription:",
+        stripeError
+      );
+    }
+
     // Envoyer le meter event à Stripe
     let stripeMeterEventId: string | null = null;
     try {
+      // Pour les metered prices, on doit utiliser subscription_item_id dans le payload
+      // pour que Stripe associe correctement l'event à la facture
+      const payload: any = {
+        value: user_count.toString(),
+      };
+
+      if (subscriptionItemId) {
+        // Utiliser subscription_item_id si disponible (recommandé pour metered billing)
+        payload.stripe_subscription_item_id = subscriptionItemId;
+      } else {
+        // Fallback sur customer_id si subscription_item_id n'est pas disponible
+        payload.stripe_customer_id = org.stripe_customer_id;
+      }
+
+      // Dimensions optionnelles pour analytics
+      if (deployment_type || org.deployment_type) {
+        payload.deployment_type = deployment_type || org.deployment_type;
+      }
+
       const meterEvent = await stripe.billing.meterEvents.create({
         event_name: METER_EVENT_NAME,
-        payload: {
-          stripe_customer_id: org.stripe_customer_id,
-          value: user_count.toString(),
-          // Dimensions optionnelles pour analytics
-          deployment_type: deployment_type || org.deployment_type,
-        },
-        timestamp: timestamp 
+        payload,
+        timestamp: timestamp
           ? Math.floor(new Date(timestamp).getTime() / 1000)
           : Math.floor(Date.now() / 1000),
       }) as any;
 
       stripeMeterEventId = meterEvent.id;
-    } catch (stripeError) {
-      console.error("Error sending meter event to Stripe:", stripeError);
+      console.log(
+        `[Meter Events] ✅ Meter event created: ${stripeMeterEventId} for ${user_count} users`
+      );
+    } catch (stripeError: any) {
+      console.error("[Meter Events] Error sending meter event to Stripe:", {
+        error: stripeError.message,
+        code: stripeError.code,
+        user_count,
+        subscription_item_id: subscriptionItemId,
+      });
       // On continue quand même pour stocker le rapport localement
     }
 

@@ -15,7 +15,7 @@ import { stripe, STRIPE_PRICES } from "@/lib/stripe";
  * {
  *   admin_email: string,
  *   deployment_type: "on-premise" | "managed-cloud",
- *   plan_type: "managed-cloud" | "self-hosted",
+ *   billing_period: "monthly" | "yearly",
  *   trial_days?: number (default: 4)
  * }
  */
@@ -49,15 +49,38 @@ export async function POST(
 
     const { id: organizationId } = await params;
     const body = await request.json();
-    const { admin_email, deployment_type, plan_type, trial_days = 4 } = body;
+    const {
+      admin_email,
+      deployment_type,
+      billing_period,
+      trial_days = 4,
+    } = body;
 
     // Validation
-    if (!admin_email || !deployment_type || !plan_type) {
+    if (!admin_email || !deployment_type || !billing_period) {
       return NextResponse.json(
         {
           error:
-            "Missing required fields: admin_email, deployment_type, plan_type",
+            "Missing required fields: admin_email, deployment_type, billing_period",
         },
+        { status: 400 }
+      );
+    }
+
+    // Validation des valeurs
+    if (
+      deployment_type !== "on-premise" &&
+      deployment_type !== "managed-cloud"
+    ) {
+      return NextResponse.json(
+        { error: "deployment_type must be 'on-premise' or 'managed-cloud'" },
+        { status: 400 }
+      );
+    }
+
+    if (billing_period !== "monthly" && billing_period !== "yearly") {
+      return NextResponse.json(
+        { error: "billing_period must be 'monthly' or 'yearly'" },
         { status: 400 }
       );
     }
@@ -98,37 +121,58 @@ export async function POST(
         vaultai_organization_name: org.name,
         instance_url: org.instance_url || "unknown",
         deployment_type,
-        plan_type,
+        billing_period,
       },
     });
 
     console.log(`[Admin] Created Stripe customer: ${customer.id}`);
 
-    // Sélectionner le bon price selon le plan
-    const priceId =
-      plan_type === "managed-cloud"
-        ? STRIPE_PRICES.MANAGED_CLOUD_MONTHLY
-        : STRIPE_PRICES.SELF_HOSTED_MONTHLY;
+    // Sélectionner le bon price selon deployment_type et billing_period
+    let priceId: string;
+    if (deployment_type === "managed-cloud") {
+      priceId =
+        billing_period === "yearly"
+          ? STRIPE_PRICES.MANAGED_CLOUD_YEARLY
+          : STRIPE_PRICES.MANAGED_CLOUD_MONTHLY;
+    } else {
+      // on-premise (self-hosted)
+      priceId =
+        billing_period === "yearly"
+          ? STRIPE_PRICES.SELF_HOSTED_YEARLY
+          : STRIPE_PRICES.SELF_HOSTED_MONTHLY;
+    }
 
     // Créer une subscription avec période d'essai
+    // Utilisation de "send_invoice" pour permettre la facturation sans carte bancaire
+    // Les factures seront envoyées par email et le client paiera via un lien de paiement
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: priceId }],
       trial_period_days: trial_days,
+      collection_method: "send_invoice", // Envoie les factures par email au lieu de prélever automatiquement
+      days_until_due: 30, // Le client a 30 jours pour payer après réception de la facture
       metadata: {
         vaultai_organization_id: organizationId,
         deployment_type,
-        plan_type,
+        billing_period,
       },
     });
 
     console.log(`[Admin] Created Stripe subscription: ${subscription.id}`);
+
+    // Récupérer le subscription_item_id (nécessaire pour les meter events)
+    const subscriptionItemId = subscription.items.data[0]?.id;
+    if (!subscriptionItemId) {
+      throw new Error("Failed to get subscription item ID");
+    }
+    console.log(`[Admin] Subscription item ID: ${subscriptionItemId}`);
 
     // Calculer la date de fin d'essai
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + trial_days);
 
     // Mettre à jour l'organisation dans la DB
+    // On stocke le subscription_item_id dans les metadata pour pouvoir l'utiliser plus tard
     const [updatedOrg] = await db
       .update(organizations)
       .set({
@@ -136,7 +180,7 @@ export async function POST(
         stripe_subscription_id: subscription.id,
         admin_email,
         deployment_type: deployment_type as "on-premise" | "managed-cloud",
-        plan_type: plan_type as "managed-cloud" | "self-hosted",
+        billing_period: billing_period as "monthly" | "yearly",
         subscription_status: "trial",
         trial_end: trialEnd,
         updated_at: new Date(),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, organizations, usageReports } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { authenticateRequest } from "@/lib/config";
+import { stripe } from "@/lib/stripe";
 
 /**
  * POST /api/usage-report
@@ -77,10 +78,63 @@ export async function POST(request: NextRequest) {
           stripe_customer_id: null,
           stripe_subscription_id: null,
           deployment_type: null, // Sera défini manuellement par l'admin
-          plan_type: null, // Sera défini manuellement par l'admin
+          billing_period: null, // Sera défini manuellement par l'admin
         });
       
       console.log(`[Usage Report] Created new organization: ${organization_name} (pending manual setup)`);
+    }
+
+    // Si l'organisation est liée à Stripe, mettre à jour la quantité directement
+    if (existingOrg?.stripe_customer_id && existingOrg?.stripe_subscription_id) {
+      try {
+        console.log(
+          `[Usage Report] Organization linked to Stripe, updating subscription quantity to ${user_count} users...`
+        );
+
+        // Récupérer la subscription depuis Stripe pour obtenir le subscription_item_id
+        let subscriptionItemId: string | null = null;
+        try {
+          const subscription = await stripe.subscriptions.retrieve(
+            existingOrg.stripe_subscription_id
+          );
+          subscriptionItemId = subscription.items.data[0]?.id || null;
+
+          if (subscriptionItemId) {
+            // Mettre à jour la quantité directement sur le subscription_item
+            await stripe.subscriptionItems.update(subscriptionItemId, {
+              quantity: user_count,
+            });
+
+            console.log(
+              `[Usage Report] ✅ Subscription quantity updated to ${user_count} users (item: ${subscriptionItemId})`
+            );
+          } else {
+            console.error(
+              "[Usage Report] No subscription item found for subscription"
+            );
+          }
+        } catch (stripeError: any) {
+          console.error(
+            "[Usage Report] Error updating subscription quantity:",
+            {
+              error: stripeError.message,
+              code: stripeError.code,
+              user_count,
+            }
+          );
+          // On continue quand même pour sauvegarder le rapport localement
+        }
+      } catch (stripeError: any) {
+        console.error(
+          "[Usage Report] Error updating subscription in Stripe:",
+          {
+            error: stripeError.message,
+            code: stripeError.code,
+            user_count,
+          }
+        );
+        // On continue quand même pour sauvegarder le rapport localement
+      }
     }
 
     // Enregistrer le rapport d'usage
@@ -89,16 +143,13 @@ export async function POST(request: NextRequest) {
       .values({
         organization_id,
         user_count,
-        deployment_type: "unknown", // On ne sait pas encore, sera récupéré depuis organizations pour facturation
+        deployment_type: existingOrg?.deployment_type || "unknown",
         reported_at: timestamp ? new Date(timestamp) : new Date(),
-        stripe_meter_event_id: null, // Sera envoyé à Stripe seulement si org liée
+        stripe_meter_event_id: null, // On n'utilise plus les meter events, on met à jour directement la quantité
       })
       .returning();
 
     console.log(`[Usage Report] ✅ Report saved for ${organization_name}: ${user_count} users`);
-
-    // TODO: Si l'organisation est liée à Stripe, envoyer le meter event
-    // TODO: Implémenter la logique de facturation Stripe
 
     return NextResponse.json({
       success: true,

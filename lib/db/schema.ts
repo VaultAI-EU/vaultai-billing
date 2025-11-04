@@ -86,7 +86,7 @@ export const organizations = pgTable("organizations", {
   
   // Configuration du plan (définie manuellement par l'admin billing)
   deployment_type: varchar("deployment_type", { length: 20 }), // "on-premise" | "managed-cloud" (NULL si pas encore défini)
-  plan_type: varchar("plan_type", { length: 20 }), // "managed-cloud" | "self-hosted" (NULL si pas encore défini)
+  billing_period: varchar("billing_period", { length: 20 }), // "monthly" | "yearly" (NULL si pas encore défini)
   subscription_status: varchar("subscription_status", { length: 20 }).default(
     "pending"
   ), // "pending" | "trial" | "active" | "past_due" | "canceled"

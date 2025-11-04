@@ -77,7 +77,7 @@ export async function GET(
       subscription_status: org.subscription_status,
       trial_active: isTrialActive,
       trial_end: org.trial_end?.toISOString() || null,
-      plan_type: org.plan_type,
+      billing_period: org.billing_period,
       deployment_type: org.deployment_type,
       stripe_subscription: subscriptionDetails,
     });
