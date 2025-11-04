@@ -79,44 +79,23 @@ export async function GET(
     });
 
     // Récupérer la prochaine facture à venir (upcoming invoice)
+    // On récupère les factures en brouillon (draft) qui représentent les factures à venir
     let upcomingInvoice = null;
     if (org.stripe_subscription_id) {
       try {
-        // Utiliser la méthode correcte pour récupérer la facture à venir
-        const upcomingInvoices = await stripe.invoices.list({
+        const draftInvoices = await stripe.invoices.list({
           customer: org.stripe_customer_id,
           subscription: org.stripe_subscription_id,
           status: "draft",
           limit: 1,
         });
         
-        if (upcomingInvoices.data.length > 0) {
-          upcomingInvoice = upcomingInvoices.data[0];
-        } else {
-          // Essayer de récupérer via l'API preview
-          try {
-            const subscription = await stripe.subscriptions.retrieve(
-              org.stripe_subscription_id
-            );
-            // Si on a une facture en cours de préparation, elle sera dans les invoices drafts
-            // Sinon, on peut essayer de créer une preview
-            const preview = await stripe.invoices.upcoming({
-              customer: org.stripe_customer_id,
-              subscription: org.stripe_subscription_id,
-            });
-            upcomingInvoice = preview;
-          } catch (previewError: any) {
-            // Si pas de facture à venir (ex: période d'essai), ignorer l'erreur
-            if (previewError.code !== "invoice_upcoming_none") {
-              console.error("[Invoices] Error retrieving upcoming invoice:", previewError);
-            }
-          }
+        if (draftInvoices.data.length > 0) {
+          upcomingInvoice = draftInvoices.data[0];
         }
       } catch (error: any) {
-        // Si pas de facture à venir (ex: période d'essai), ignorer l'erreur
-        if (error.code !== "invoice_upcoming_none") {
-          console.error("[Invoices] Error retrieving upcoming invoice:", error);
-        }
+        // Ignorer les erreurs silencieusement
+        console.error("[Invoices] Error retrieving draft invoices:", error);
       }
     }
 
