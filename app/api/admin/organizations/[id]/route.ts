@@ -78,6 +78,8 @@ export async function GET(
       organization: {
         id: org.id,
         name: org.name,
+        display_name: org.display_name,
+        tags: org.tags || [],
         instance_url: org.instance_url,
         stripe_customer_id: org.stripe_customer_id,
         stripe_subscription_id: org.stripe_subscription_id,

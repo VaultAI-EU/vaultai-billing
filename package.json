@@ -12,6 +12,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:add-billing-period": "tsx scripts/add-billing-period.ts",
+    "db:add-display-name": "tsx scripts/add-display-name.ts",
+    "db:add-tags": "tsx scripts/add-tags.ts",
     "setup:stripe": "tsx scripts/setup-stripe.ts",
     "delete:user": "tsx scripts/delete-user.ts"
   },

@@ -38,11 +38,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, RefreshCw, Settings, Unlink, FileText, ExternalLink } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings, Unlink, FileText, ExternalLink, Pencil } from "lucide-react";
 
 type Organization = {
   id: string;
   name: string;
+  display_name: string | null;
+  tags: string[];
   instance_url: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
@@ -132,6 +134,13 @@ export default function OrganizationDetailPage({
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showDisplayNameEdit, setShowDisplayNameEdit] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [updatingDisplayName, setUpdatingDisplayName] = useState(false);
+  const [showTagsEdit, setShowTagsEdit] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [updatingTags, setUpdatingTags] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -162,6 +171,8 @@ export default function OrganizationDetailPage({
       }
       const data = await response.json();
       setOrgData(data);
+      setDisplayName(data.organization.display_name || "");
+      setTags(data.organization.tags || []);
       if (data.organization.admin_email) {
         setStripeForm((prev) => ({
           ...prev,
@@ -262,6 +273,86 @@ export default function OrganizationDetailPage({
     }
   };
 
+  const handleUpdateTags = async () => {
+    if (!orgId) return;
+    try {
+      setUpdatingTags(true);
+      const response = await fetch(
+        `/api/admin/organizations/${orgId}/tags`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({ tags }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update tags");
+      }
+
+      await fetchOrganization();
+      setShowTagsEdit(false);
+      setNewTag("");
+      alert("Tags mis à jour avec succès !");
+    } catch (err) {
+      alert(
+        err instanceof Error ? err.message : "Erreur lors de la mise à jour"
+      );
+    } finally {
+      setUpdatingTags(false);
+    }
+  };
+
+  const addTag = () => {
+    if (newTag.trim() && !tags.includes(newTag.trim())) {
+      setTags([...tags, newTag.trim()]);
+      setNewTag("");
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleUpdateDisplayName = async () => {
+    if (!orgId) return;
+    try {
+      setUpdatingDisplayName(true);
+      const response = await fetch(
+        `/api/admin/organizations/${orgId}/display-name`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            display_name: displayName.trim() || null,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update display name");
+      }
+
+      await fetchOrganization();
+      setShowDisplayNameEdit(false);
+      alert("Nom d'affichage mis à jour avec succès !");
+    } catch (err) {
+      alert(
+        err instanceof Error ? err.message : "Erreur lors de la mise à jour"
+      );
+    } finally {
+      setUpdatingDisplayName(false);
+    }
+  };
+
   const handleUpdateQuantity = async () => {
     if (!orgId || !orgData) return;
     
@@ -348,12 +439,53 @@ export default function OrganizationDetailPage({
 
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-4xl font-bold mb-2 text-gray-900 dark:text-white">
-                {org.name}
-              </h1>
-              {org.instance_url && (
-                <p className="text-gray-600 dark:text-gray-400">{org.instance_url}</p>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+                  {org.display_name || org.name}
+                </h1>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDisplayNameEdit(true)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  title="Modifier le nom d'affichage"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
+              {org.display_name && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Nom original: {org.name}
+                </p>
               )}
+              {org.instance_url && (
+                <p className="text-gray-600 dark:text-gray-400 mb-2">{org.instance_url}</p>
+              )}
+              {org.tags && org.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  {org.tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant={tag === "exclude_from_stats" ? "destructive" : "secondary"}
+                      className="text-xs"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowTagsEdit(true);
+                  setTags(org.tags || []);
+                }}
+                className="mt-2"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Gérer les tags
+              </Button>
             </div>
             <div className="flex gap-2">
               {!org.stripe_customer_id ? (
@@ -818,12 +950,155 @@ export default function OrganizationDetailPage({
         </div>
       </div>
 
+      {/* Dialog Edit Tags */}
+      <Dialog open={showTagsEdit} onOpenChange={setShowTagsEdit}>
+        <DialogContent className="sm:max-w-[500px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">
+              Gérer les tags
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Ajoutez des tags pour organiser vos organisations. Le tag <strong>"exclude_from_stats"</strong> exclut cette organisation des analyses de revenus.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="tags" className="text-gray-700 dark:text-gray-300">
+                Tags actuels
+              </Label>
+              <div className="flex flex-wrap gap-2 p-3 border border-gray-300 dark:border-gray-600 rounded-md min-h-[60px]">
+                {tags.length === 0 ? (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Aucun tag
+                  </span>
+                ) : (
+                  tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant={tag === "exclude_from_stats" ? "destructive" : "secondary"}
+                      className="flex items-center gap-1"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 hover:text-red-500"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new_tag" className="text-gray-700 dark:text-gray-300">
+                Ajouter un tag
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="new_tag"
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addTag();
+                    }
+                  }}
+                  placeholder="exclude_from_stats, investor, dev, prod..."
+                  className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                />
+                <Button onClick={addTag} variant="outline">
+                  Ajouter
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Tags suggérés: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">exclude_from_stats</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">investor</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">dev</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">prod</code>
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTagsEdit(false);
+                setTags(org.tags || []);
+                setNewTag("");
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleUpdateTags}
+              disabled={updatingTags}
+            >
+              {updatingTags ? "Mise à jour..." : "Enregistrer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Edit Display Name */}
+      <Dialog open={showDisplayNameEdit} onOpenChange={setShowDisplayNameEdit}>
+        <DialogContent className="sm:max-w-[500px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">
+              Modifier le nom d'affichage
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Définissez un nom personnalisé pour cette organisation. Laissez vide pour utiliser le nom original.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="display_name" className="text-gray-700 dark:text-gray-300">
+                Nom d'affichage
+              </Label>
+              <Input
+                id="display_name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={org.name}
+                className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Nom original: {org.name}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDisplayNameEdit(false);
+                setDisplayName(org.display_name || "");
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleUpdateDisplayName}
+              disabled={updatingDisplayName}
+            >
+              {updatingDisplayName ? "Mise à jour..." : "Enregistrer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog Setup Stripe */}
       <Dialog open={showStripeSetup} onOpenChange={setShowStripeSetup}>
         <DialogContent className="sm:max-w-[600px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-gray-900 dark:text-white">
-              Configurer Stripe pour {org.name}
+              Configurer Stripe pour {org.display_name || org.name}
             </DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-400">
               Liez cette organisation à un customer Stripe et créez une subscription.

@@ -6,6 +6,7 @@ import {
   integer,
   varchar,
   boolean,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -78,6 +79,7 @@ export const verification = pgTable("verification", {
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().notNull(), // organization_id depuis VaultAI
   name: text("name").notNull(),
+  display_name: text("display_name"), // Nom d'affichage personnalisé (admin billing)
   instance_url: text("instance_url"), // URL de l'instance VaultAI (ex: dev.vaultai.eu)
   
   // Informations Stripe (NULL si pas encore lié manuellement)
@@ -94,6 +96,9 @@ export const organizations = pgTable("organizations", {
   
   // Contact
   admin_email: text("admin_email"), // Email admin pour facturation
+  
+  // Tags pour organisation et filtrage
+  tags: jsonb("tags").$type<string[]>().default([]), // Tags pour exclure des stats (ex: ["exclude_from_stats", "investor", "dev", "prod"])
   
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),

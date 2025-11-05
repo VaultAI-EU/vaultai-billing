@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
         linked: linked.map(org => ({
           id: org.id,
           name: org.name,
+          display_name: org.display_name,
+          tags: org.tags || [],
           instance_url: org.instance_url,
           stripe_customer_id: org.stripe_customer_id,
           stripe_subscription_id: org.stripe_subscription_id,
@@ -70,6 +72,8 @@ export async function GET(request: NextRequest) {
         pending: pending.map(org => ({
           id: org.id,
           name: org.name,
+          display_name: org.display_name,
+          tags: org.tags || [],
           instance_url: org.instance_url,
           subscription_status: org.subscription_status,
           created_at: org.created_at,
