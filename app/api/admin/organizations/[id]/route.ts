@@ -88,6 +88,8 @@ export async function GET(
         subscription_status: org.subscription_status,
         admin_email: org.admin_email,
         trial_end: org.trial_end,
+        license_override: (org as any).license_override || null,
+        license_override_reason: (org as any).license_override_reason || null,
         created_at: org.created_at,
         updated_at: org.updated_at,
       },

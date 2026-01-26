@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, RefreshCw, Settings, Unlink, FileText, ExternalLink, Pencil } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings, Unlink, FileText, ExternalLink, Pencil, ShieldAlert, ShieldCheck, AlertTriangle, ShieldOff } from "lucide-react";
 
 type Organization = {
   id: string;
@@ -53,6 +53,8 @@ type Organization = {
   subscription_status: string;
   admin_email: string | null;
   trial_end: Date | null;
+  license_override: string | null;
+  license_override_reason: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -141,6 +143,10 @@ export default function OrganizationDetailPage({
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [updatingTags, setUpdatingTags] = useState(false);
+  const [showLicenseOverride, setShowLicenseOverride] = useState(false);
+  const [licenseOverrideValue, setLicenseOverrideValue] = useState<string | null>(null);
+  const [licenseOverrideReason, setLicenseOverrideReason] = useState("");
+  const [updatingLicenseOverride, setUpdatingLicenseOverride] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -173,6 +179,8 @@ export default function OrganizationDetailPage({
       setOrgData(data);
       setDisplayName(data.organization.display_name || "");
       setTags(data.organization.tags || []);
+      setLicenseOverrideValue(data.organization.license_override || null);
+      setLicenseOverrideReason(data.organization.license_override_reason || "");
       if (data.organization.admin_email) {
         setStripeForm((prev) => ({
           ...prev,
@@ -350,6 +358,46 @@ export default function OrganizationDetailPage({
       );
     } finally {
       setUpdatingDisplayName(false);
+    }
+  };
+
+  const handleUpdateLicenseOverride = async () => {
+    if (!orgId) return;
+    try {
+      setUpdatingLicenseOverride(true);
+      const response = await fetch(
+        `/api/admin/organizations/${orgId}/license-override`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            license_override: licenseOverrideValue,
+            reason: licenseOverrideReason.trim() || null,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update license override");
+      }
+
+      await fetchOrganization();
+      setShowLicenseOverride(false);
+      alert(
+        licenseOverrideValue
+          ? `✅ Statut de licence forcé à "${licenseOverrideValue}"`
+          : "✅ Override de licence supprimé"
+      );
+    } catch (err) {
+      alert(
+        err instanceof Error ? err.message : "Erreur lors de la mise à jour"
+      );
+    } finally {
+      setUpdatingLicenseOverride(false);
     }
   };
 
@@ -644,6 +692,124 @@ export default function OrganizationDetailPage({
                       </div>
                     )}
                   </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Statut de Licence */}
+          <Card className="mb-8 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldAlert className="h-5 w-5" />
+                    Contrôle de Licence
+                  </CardTitle>
+                  <CardDescription>
+                    Forcez le statut de licence pour cette instance (fraude, non-paiement, avertissement)
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setShowLicenseOverride(true)}
+                  variant={org.license_override ? "destructive" : "outline"}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  {org.license_override ? "Modifier l'override" : "Forcer un statut"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Current Status Display */}
+                <div className="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                  {org.license_override === "suspended" ? (
+                    <>
+                      <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/30">
+                        <ShieldOff className="h-6 w-6 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-red-600 dark:text-red-400">
+                          LICENCE SUSPENDUE
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {org.license_override_reason || "Aucune raison spécifiée"}
+                        </p>
+                      </div>
+                    </>
+                  ) : org.license_override === "warning" ? (
+                    <>
+                      <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                        <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-amber-600 dark:text-amber-400">
+                          AVERTISSEMENT ACTIF
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {org.license_override_reason || "Aucune raison spécifiée"}
+                        </p>
+                      </div>
+                    </>
+                  ) : org.license_override === "active" ? (
+                    <>
+                      <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                        <ShieldCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-blue-600 dark:text-blue-400">
+                          LICENCE FORCÉE ACTIVE
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {org.license_override_reason || "Override manuel vers actif"}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/30">
+                        <ShieldCheck className="h-6 w-6 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-green-600 dark:text-green-400">
+                          STATUT NORMAL
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          La licence suit le statut Stripe : {org.subscription_status || "pending"}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Quick Actions */}
+                {!org.license_override && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/20"
+                      onClick={() => {
+                        setLicenseOverrideValue("warning");
+                        setShowLicenseOverride(true);
+                      }}
+                    >
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      Ajouter un warning
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                      onClick={() => {
+                        setLicenseOverrideValue("suspended");
+                        setShowLicenseOverride(true);
+                      }}
+                    >
+                      <ShieldOff className="h-4 w-4 mr-2" />
+                      Suspendre la licence
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardContent>
@@ -1088,6 +1254,120 @@ export default function OrganizationDetailPage({
               disabled={updatingDisplayName}
             >
               {updatingDisplayName ? "Mise à jour..." : "Enregistrer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog License Override */}
+      <Dialog open={showLicenseOverride} onOpenChange={setShowLicenseOverride}>
+        <DialogContent className="sm:max-w-[500px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">
+              Contrôle de licence - {org.display_name || org.name}
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Forcez le statut de licence pour cette instance. Cela prend effet immédiatement.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-gray-700 dark:text-gray-300">
+                Statut de licence
+              </Label>
+              <Select
+                value={licenseOverrideValue || "none"}
+                onValueChange={(value) =>
+                  setLicenseOverrideValue(value === "none" ? null : value)
+                }
+              >
+                <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                  <SelectItem value="none" className="text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-green-600" />
+                      Normal (suivre Stripe)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="warning" className="text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      Avertissement
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="suspended" className="text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-2">
+                      <ShieldOff className="h-4 w-4 text-red-600" />
+                      Suspendu (fraude/non-paiement)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="active" className="text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-blue-600" />
+                      Forcer actif (tests/accord spécial)
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="override_reason" className="text-gray-700 dark:text-gray-300">
+                Raison (affiché à l'utilisateur si warning)
+              </Label>
+              <Input
+                id="override_reason"
+                type="text"
+                value={licenseOverrideReason}
+                onChange={(e) => setLicenseOverrideReason(e.target.value)}
+                placeholder="Ex: Facture en retard depuis 30 jours"
+                className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Pour les warnings, ce message sera affiché dans l'interface VaultAI
+              </p>
+            </div>
+
+            {licenseOverrideValue === "suspended" && (
+              <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  <strong>⚠️ Attention :</strong> La suspension affichera un message d'erreur
+                  permanent sur l'instance VaultAI. L'utilisateur devra contacter le support.
+                </p>
+              </div>
+            )}
+
+            {licenseOverrideValue === "warning" && (
+              <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  <strong>ℹ️ Info :</strong> Un avertissement sera affiché dans les paramètres
+                  de l'organisation sur VaultAI. L'application reste utilisable.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowLicenseOverride(false);
+                setLicenseOverrideValue(org.license_override || null);
+                setLicenseOverrideReason(org.license_override_reason || "");
+              }}
+              disabled={updatingLicenseOverride}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleUpdateLicenseOverride}
+              disabled={updatingLicenseOverride}
+              variant={licenseOverrideValue === "suspended" ? "destructive" : "default"}
+            >
+              {updatingLicenseOverride ? "Mise à jour..." : "Appliquer"}
             </Button>
           </DialogFooter>
         </DialogContent>

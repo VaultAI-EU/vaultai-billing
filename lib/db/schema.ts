@@ -97,6 +97,14 @@ export const organizations = pgTable("organizations", {
   // Contact
   admin_email: text("admin_email"), // Email admin pour facturation
   
+  // License override - permet de forcer un statut de licence indépendamment de Stripe
+  // null = utiliser le statut dérivé de Stripe
+  // "suspended" = forcer la suspension (fraude, non-paiement grave)
+  // "warning" = afficher un avertissement
+  // "active" = forcer le statut actif (tests, accords spéciaux)
+  license_override: varchar("license_override", { length: 20 }),
+  license_override_reason: text("license_override_reason"), // Raison de l'override (pour historique)
+  
   // Tags pour organisation et filtrage
   tags: jsonb("tags").$type<string[]>().default([]), // Tags pour exclure des stats (ex: ["exclude_from_stats", "investor", "dev", "prod"])
   
