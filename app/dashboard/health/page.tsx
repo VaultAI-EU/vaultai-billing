@@ -48,11 +48,16 @@ import {
 
 // ─── Types ────────────────────────────────────────────────
 
-type HealthInstance = {
-  organization_id: string;
-  organization_name: string;
-  instance_url: string | null;
+type OrgInfo = {
+  id: string;
+  name: string;
   subscription_status: string | null;
+  hidden: boolean;
+};
+
+type HealthInstance = {
+  instance_url: string;
+  organizations: OrgInfo[];
   status: string;
   memory_rss_mb: number | null;
   memory_heap_used_mb: number | null;
@@ -76,7 +81,6 @@ type HealthResponse = {
     warning: number;
     unhealthy: number;
     down: number;
-    never_reported: number;
   };
   instances: HealthInstance[];
 };
@@ -90,17 +94,6 @@ type HealthReport = {
   uptime_seconds: number;
   status: string;
   reported_at: string;
-};
-
-type OrgHistory = {
-  organization_id: string;
-  organization_name: string;
-  reports: HealthReport[];
-};
-
-type HistoryResponse = {
-  success: boolean;
-  organizations: OrgHistory[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -117,7 +110,7 @@ function formatUptime(seconds: number | null): string {
 
 function formatLastSeen(minutes: number | null): string {
   if (minutes === null) return "Jamais";
-  if (minutes < 1) return "À l'instant";
+  if (minutes < 1) return "A l'instant";
   if (minutes < 60) return `il y a ${minutes}min`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `il y a ${hours}h`;
@@ -202,7 +195,7 @@ function MemoryBar({
   );
 }
 
-function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) {
+function InstanceGraphs({ instanceUrl }: { instanceUrl: string }) {
   const [reports, setReports] = useState<HealthReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [hours, setHours] = useState(24);
@@ -211,7 +204,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
     try {
       setLoading(true);
       const res = await fetch(
-        `/api/admin/health/history?org_id=${orgId}&hours=${hours}`,
+        `/api/admin/health/history?instance_url=${encodeURIComponent(instanceUrl)}&hours=${hours}`,
         { credentials: "include" }
       );
       if (!res.ok) return;
@@ -222,7 +215,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
     } finally {
       setLoading(false);
     }
-  }, [orgId, hours]);
+  }, [instanceUrl, hours]);
 
   useEffect(() => {
     fetchHistory();
@@ -239,7 +232,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
   if (reports.length === 0) {
     return (
       <div className="py-4 text-center text-sm text-muted-foreground">
-        Aucune donnée historique disponible
+        Aucune donnee historique disponible
       </div>
     );
   }
@@ -279,7 +272,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <MemoryStick className="h-4 w-4" />
-              Mémoire (MB)
+              Memoire (MB)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -308,7 +301,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
                     name === "rss"
                       ? "RSS"
                       : name === "heap_used"
-                        ? "Heap utilisé"
+                        ? "Heap utilise"
                         : "Heap total",
                   ]}
                 />
@@ -318,7 +311,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
                     value === "rss"
                       ? "RSS"
                       : value === "heap_used"
-                        ? "Heap utilisé"
+                        ? "Heap utilise"
                         : "Heap total"
                   }
                 />
@@ -444,7 +437,7 @@ function InstanceGraphs({ orgId, orgName }: { orgId: string; orgName: string }) 
             Uptime (heures)
           </CardTitle>
           <CardDescription className="text-xs">
-            Un reset indique un redémarrage de l'instance
+            Un reset indique un redemarrage de l'instance
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -493,7 +486,7 @@ export default function HealthDashboardPage() {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
+  const [expandedInstance, setExpandedInstance] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -670,113 +663,136 @@ export default function HealthDashboardPage() {
                   Aucune instance trouvee
                 </p>
               ) : (
-                <div className="space-y-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-8"></TableHead>
-                        <TableHead>Organisation</TableHead>
-                        <TableHead>Instance</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Heap</TableHead>
-                        <TableHead>RSS</TableHead>
-                        <TableHead>CPU</TableHead>
-                        <TableHead>Uptime</TableHead>
-                        <TableHead>Derniere activite</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.instances.map((instance) => (
-                        <>
-                          <TableRow
-                            key={instance.organization_id}
-                            className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
-                              instance.is_potentially_down ? "opacity-60" : ""
-                            } ${
-                              expandedOrg === instance.organization_id
-                                ? "bg-gray-50 dark:bg-gray-700/30"
-                                : ""
-                            }`}
-                            onClick={() =>
-                              setExpandedOrg(
-                                expandedOrg === instance.organization_id
-                                  ? null
-                                  : instance.organization_id
-                              )
-                            }
-                          >
-                            <TableCell className="w-8">
-                              {expandedOrg === instance.organization_id ? (
-                                <ChevronUp className="h-4 w-4 text-gray-400" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-gray-400" />
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {instance.organization_name}
-                            </TableCell>
-                            <TableCell>
-                              {instance.instance_url ? (
-                                <a
-                                  href={
-                                    instance.instance_url.startsWith("http")
-                                      ? instance.instance_url
-                                      : `https://${instance.instance_url}`
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-                                  onClick={(e) => e.stopPropagation()}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Instance</TableHead>
+                      <TableHead>Organisations</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Heap</TableHead>
+                      <TableHead>RSS</TableHead>
+                      <TableHead>CPU</TableHead>
+                      <TableHead>Uptime</TableHead>
+                      <TableHead>Derniere activite</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.instances.map((instance) => (
+                      <>
+                        <TableRow
+                          key={instance.instance_url}
+                          className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
+                            instance.is_potentially_down ? "opacity-60" : ""
+                          } ${
+                            expandedInstance === instance.instance_url
+                              ? "bg-gray-50 dark:bg-gray-700/30"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setExpandedInstance(
+                              expandedInstance === instance.instance_url
+                                ? null
+                                : instance.instance_url
+                            )
+                          }
+                        >
+                          <TableCell className="w-8">
+                            {expandedInstance === instance.instance_url ? (
+                              <ChevronUp className="h-4 w-4 text-gray-400" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-gray-400" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <a
+                              href={
+                                instance.instance_url.startsWith("http")
+                                  ? instance.instance_url
+                                  : `https://${instance.instance_url}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {instance.instance_url}
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {instance.organizations
+                                .filter((o) => !o.hidden)
+                                .map((org) => (
+                                  <Badge
+                                    key={org.id}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {org.name}
+                                  </Badge>
+                                ))}
+                              {instance.organizations.filter((o) => o.hidden)
+                                .length > 0 && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs text-gray-400"
                                 >
-                                  {instance.instance_url}
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-sm">
-                                  —
-                                </span>
+                                  +
+                                  {
+                                    instance.organizations.filter(
+                                      (o) => o.hidden
+                                    ).length
+                                  }{" "}
+                                  masquees
+                                </Badge>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              <StatusBadge status={instance.status} />
-                            </TableCell>
-                            <TableCell>
-                              <MemoryBar
-                                used={instance.memory_heap_used_mb}
-                                total={instance.memory_heap_total_mb}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={instance.status} />
+                          </TableCell>
+                          <TableCell>
+                            <MemoryBar
+                              used={instance.memory_heap_used_mb}
+                              total={instance.memory_heap_total_mb}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {instance.memory_rss_mb !== null
+                              ? `${instance.memory_rss_mb} MB`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {instance.cpu_user_percent !== null
+                              ? `${instance.cpu_user_percent + (instance.cpu_system_percent ?? 0)}%`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatUptime(instance.uptime_seconds)}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatLastSeen(instance.last_seen_minutes_ago)}
+                          </TableCell>
+                        </TableRow>
+                        {expandedInstance === instance.instance_url && (
+                          <TableRow
+                            key={`${instance.instance_url}-graphs`}
+                          >
+                            <TableCell
+                              colSpan={9}
+                              className="p-4 bg-gray-50/50 dark:bg-gray-800/50"
+                            >
+                              <InstanceGraphs
+                                instanceUrl={instance.instance_url}
                               />
                             </TableCell>
-                            <TableCell className="text-sm">
-                              {instance.memory_rss_mb !== null
-                                ? `${instance.memory_rss_mb} MB`
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {instance.cpu_user_percent !== null
-                                ? `${(instance.cpu_user_percent + (instance.cpu_system_percent ?? 0))}%`
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {formatUptime(instance.uptime_seconds)}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {formatLastSeen(instance.last_seen_minutes_ago)}
-                            </TableCell>
                           </TableRow>
-                          {expandedOrg === instance.organization_id && (
-                            <TableRow key={`${instance.organization_id}-graphs`}>
-                              <TableCell colSpan={9} className="p-4 bg-gray-50/50 dark:bg-gray-800/50">
-                                <InstanceGraphs
-                                  orgId={instance.organization_id}
-                                  orgName={instance.organization_name}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                        )}
+                      </>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>

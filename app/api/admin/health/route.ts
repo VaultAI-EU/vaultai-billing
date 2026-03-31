@@ -9,7 +9,8 @@ const DOWN_THRESHOLD_MINUTES = 30;
 /**
  * GET /api/admin/health
  *
- * Récupère le dernier rapport de santé de chaque instance.
+ * Récupère le dernier rapport de santé de chaque instance (par instance_url).
+ * Une instance peut héberger plusieurs organisations.
  * Protégé par authentification admin (session + rôle).
  */
 export async function GET(request: NextRequest) {
@@ -35,62 +36,78 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Récupérer toutes les organisations
-    const allOrgs = await db
-      .select()
-      .from(organizations)
-      .orderBy(organizations.name);
+    // Récupérer les instances distinctes depuis health_reports
+    const distinctInstances = await db
+      .selectDistinct({ instance_url: healthReports.instance_url })
+      .from(healthReports);
 
-    // Pour chaque org, récupérer le dernier rapport de santé
+    // Pour chaque instance, récupérer le dernier rapport
     const instances = await Promise.all(
-      allOrgs.map(async (org) => {
-        const [latestHealth] = await db
+      distinctInstances.map(async ({ instance_url }) => {
+        const [latest] = await db
           .select()
           .from(healthReports)
-          .where(eq(healthReports.organization_id, org.id))
+          .where(eq(healthReports.instance_url, instance_url))
           .orderBy(desc(healthReports.reported_at))
           .limit(1);
 
-        const lastSeenMinutesAgo = latestHealth
-          ? Math.round((Date.now() - new Date(latestHealth.reported_at).getTime()) / 60000)
+        const lastSeenMinutesAgo = latest
+          ? Math.round(
+              (Date.now() - new Date(latest.reported_at).getTime()) / 60000
+            )
           : null;
 
-        const isPotentiallyDown = lastSeenMinutesAgo === null || lastSeenMinutesAgo > DOWN_THRESHOLD_MINUTES;
+        const isPotentiallyDown =
+          lastSeenMinutesAgo === null ||
+          lastSeenMinutesAgo > DOWN_THRESHOLD_MINUTES;
+
+        // Trouver les orgs sur cette instance
+        const orgsOnInstance = await db
+          .select({
+            id: organizations.id,
+            name: organizations.name,
+            display_name: organizations.display_name,
+            subscription_status: organizations.subscription_status,
+            hidden: organizations.hidden,
+          })
+          .from(organizations)
+          .where(eq(organizations.instance_url, instance_url));
 
         return {
-          organization_id: org.id,
-          organization_name: org.display_name || org.name,
-          instance_url: org.instance_url,
-          subscription_status: org.subscription_status,
-          // Health data (null if no report yet)
-          status: isPotentiallyDown ? "down" : latestHealth?.status || "unknown",
-          memory_rss_mb: latestHealth?.memory_rss_mb ?? null,
-          memory_heap_used_mb: latestHealth?.memory_heap_used_mb ?? null,
-          memory_heap_total_mb: latestHealth?.memory_heap_total_mb ?? null,
-          memory_external_mb: latestHealth?.memory_external_mb ?? null,
-          cpu_user_percent: latestHealth?.cpu_user_percent ?? null,
-          cpu_system_percent: latestHealth?.cpu_system_percent ?? null,
-          uptime_seconds: latestHealth?.uptime_seconds ?? null,
-          node_version: latestHealth?.node_version ?? null,
-          reported_at: latestHealth?.reported_at ?? null,
+          instance_url,
+          organizations: orgsOnInstance.map((o) => ({
+            id: o.id,
+            name: o.display_name || o.name,
+            subscription_status: o.subscription_status,
+            hidden: o.hidden,
+          })),
+          status: isPotentiallyDown
+            ? "down"
+            : latest?.status || "unknown",
+          memory_rss_mb: latest?.memory_rss_mb ?? null,
+          memory_heap_used_mb: latest?.memory_heap_used_mb ?? null,
+          memory_heap_total_mb: latest?.memory_heap_total_mb ?? null,
+          memory_external_mb: latest?.memory_external_mb ?? null,
+          cpu_user_percent: latest?.cpu_user_percent ?? null,
+          cpu_system_percent: latest?.cpu_system_percent ?? null,
+          uptime_seconds: latest?.uptime_seconds ?? null,
+          node_version: latest?.node_version ?? null,
+          reported_at: latest?.reported_at ?? null,
           last_seen_minutes_ago: lastSeenMinutesAgo,
           is_potentially_down: isPotentiallyDown,
         };
       })
     );
 
-    // Filtrer les instances qui ont au moins un rapport
     const withReports = instances.filter((i) => i.reported_at !== null);
-    const withoutReports = instances.filter((i) => i.reported_at === null);
 
     const summary = {
-      total_instances: allOrgs.length,
+      total_instances: instances.length,
       reporting: withReports.length,
       healthy: withReports.filter((i) => i.status === "healthy").length,
       warning: withReports.filter((i) => i.status === "warning").length,
       unhealthy: withReports.filter((i) => i.status === "unhealthy").length,
       down: withReports.filter((i) => i.status === "down").length,
-      never_reported: withoutReports.length,
     };
 
     return NextResponse.json({

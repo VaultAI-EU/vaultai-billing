@@ -107,7 +107,10 @@ export const organizations = pgTable("organizations", {
   
   // Tags pour organisation et filtrage
   tags: jsonb("tags").$type<string[]>().default([]), // Tags pour exclure des stats (ex: ["exclude_from_stats", "investor", "dev", "prod"])
-  
+
+  // Masquer l'org du dashboard (tests, démos, etc.)
+  hidden: boolean("hidden").default(false).notNull(),
+
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -130,18 +133,17 @@ export const usageReports = pgTable("usage_reports", {
 export type UsageReport = typeof usageReports.$inferSelect;
 export type NewUsageReport = typeof usageReports.$inferInsert;
 
-// Table pour stocker les rapports de santé des instances
+// Table pour stocker les rapports de santé des instances (clé = instance_url)
+// Une instance peut héberger plusieurs organisations
 export const healthReports = pgTable("health_reports", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organization_id: uuid("organization_id")
-    .notNull()
-    .references(() => organizations.id, { onDelete: "cascade" }),
+  instance_url: text("instance_url").notNull(), // URL de l'instance (ex: test3.vaultai.eu)
   memory_rss_mb: integer("memory_rss_mb").notNull(),
   memory_heap_used_mb: integer("memory_heap_used_mb").notNull(),
   memory_heap_total_mb: integer("memory_heap_total_mb").notNull(),
   memory_external_mb: integer("memory_external_mb").notNull(),
-  cpu_user_percent: integer("cpu_user_percent"), // Average CPU user % since process start
-  cpu_system_percent: integer("cpu_system_percent"), // Average CPU system % since process start
+  cpu_user_percent: integer("cpu_user_percent"),
+  cpu_system_percent: integer("cpu_system_percent"),
   uptime_seconds: integer("uptime_seconds").notNull(),
   node_version: varchar("node_version", { length: 30 }),
   status: varchar("status", { length: 20 }).notNull().default("healthy"),
@@ -174,7 +176,6 @@ export const accountRelations = relations(account, ({ one }) => ({
 // Relations
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   usageReports: many(usageReports),
-  healthReports: many(healthReports),
 }));
 
 export const usageReportsRelations = relations(usageReports, ({ one }) => ({
@@ -184,9 +185,4 @@ export const usageReportsRelations = relations(usageReports, ({ one }) => ({
   }),
 }));
 
-export const healthReportsRelations = relations(healthReports, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [healthReports.organization_id],
-    references: [organizations.id],
-  }),
-}));
+// healthReports n'a plus de FK vers organizations (clé = instance_url)

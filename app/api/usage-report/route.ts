@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, organizations, usageReports, healthReports } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { authenticateRequest } from "@/lib/config";
 import { stripe } from "@/lib/stripe";
 
@@ -153,26 +153,44 @@ export async function POST(request: NextRequest) {
     console.log(`[Usage Report] ✅ Report saved for ${organization_name}: ${user_count} users`);
 
     // Enregistrer le rapport de santé si présent dans le payload
-    if (health && typeof health === "object") {
+    // Clé = instance_url (une instance peut avoir plusieurs orgs)
+    // Dédup: skip si un rapport pour cette instance existe dans les 2 dernières minutes
+    if (health && typeof health === "object" && instance_url) {
       try {
-        const heapUsed = Number(health.memory_heap_used_mb) || 0;
-        const status = heapUsed > 1400 ? "unhealthy" : heapUsed > 1000 ? "warning" : "healthy";
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const [recent] = await db
+          .select({ id: healthReports.id })
+          .from(healthReports)
+          .where(
+            and(
+              eq(healthReports.instance_url, instance_url),
+              gte(healthReports.reported_at, twoMinAgo)
+            )
+          )
+          .limit(1);
 
-        await db.insert(healthReports).values({
-          organization_id,
-          memory_rss_mb: Number(health.memory_rss_mb) || 0,
-          memory_heap_used_mb: heapUsed,
-          memory_heap_total_mb: Number(health.memory_heap_total_mb) || 0,
-          memory_external_mb: Number(health.memory_external_mb) || 0,
-          cpu_user_percent: health.cpu_user_percent != null ? Math.round(Number(health.cpu_user_percent)) : null,
-          cpu_system_percent: health.cpu_system_percent != null ? Math.round(Number(health.cpu_system_percent)) : null,
-          uptime_seconds: Number(health.uptime_seconds) || 0,
-          node_version: health.node_version || null,
-          status,
-          reported_at: timestamp ? new Date(timestamp) : new Date(),
-        });
+        if (!recent) {
+          const heapUsed = Number(health.memory_heap_used_mb) || 0;
+          const status = heapUsed > 1400 ? "unhealthy" : heapUsed > 1000 ? "warning" : "healthy";
 
-        console.log(`[Usage Report] 🏥 Health report saved: ${status} (heap: ${heapUsed}MB)`);
+          await db.insert(healthReports).values({
+            instance_url,
+            memory_rss_mb: Number(health.memory_rss_mb) || 0,
+            memory_heap_used_mb: heapUsed,
+            memory_heap_total_mb: Number(health.memory_heap_total_mb) || 0,
+            memory_external_mb: Number(health.memory_external_mb) || 0,
+            cpu_user_percent: health.cpu_user_percent != null ? Math.round(Number(health.cpu_user_percent)) : null,
+            cpu_system_percent: health.cpu_system_percent != null ? Math.round(Number(health.cpu_system_percent)) : null,
+            uptime_seconds: Number(health.uptime_seconds) || 0,
+            node_version: health.node_version || null,
+            status,
+            reported_at: timestamp ? new Date(timestamp) : new Date(),
+          });
+
+          console.log(`[Usage Report] 🏥 Health report saved for ${instance_url}: ${status} (heap: ${heapUsed}MB)`);
+        } else {
+          console.log(`[Usage Report] 🏥 Health report skipped for ${instance_url} (dedup)`);
+        }
       } catch (healthError) {
         console.error("[Usage Report] Failed to save health report (non-blocking):", healthError);
       }

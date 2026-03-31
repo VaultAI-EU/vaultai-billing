@@ -27,6 +27,7 @@ type Organization = {
   billing_period: string | null;
   subscription_status: string;
   admin_email: string | null;
+  hidden: boolean;
   created_at: Date;
 };
 
@@ -66,6 +67,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -144,6 +146,26 @@ export default function DashboardPage() {
     ...(orgsData?.organizations.linked || []),
     ...(orgsData?.organizations.pending || []),
   ];
+
+  const visibleOrgs = showHidden
+    ? allOrgs
+    : allOrgs.filter((o) => !o.hidden);
+
+  const hiddenCount = allOrgs.filter((o) => o.hidden).length;
+
+  const toggleHidden = async (orgId: string, hidden: boolean) => {
+    try {
+      await fetch(`/api/admin/organizations/${orgId}/hidden`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ hidden }),
+      });
+      fetchOrganizations();
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -367,21 +389,34 @@ export default function DashboardPage() {
                     Liste de toutes les organisations et leur statut
                   </CardDescription>
                 </div>
-                <Button
-                  onClick={() => {
-                    fetchOrganizations();
-                    fetchStats();
-                  }}
-                  variant="outline"
-                  size="sm"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Actualiser
-                </Button>
+                <div className="flex items-center gap-2">
+                  {hiddenCount > 0 && (
+                    <Button
+                      onClick={() => setShowHidden(!showHidden)}
+                      variant={showHidden ? "default" : "outline"}
+                      size="sm"
+                    >
+                      {showHidden
+                        ? `Masquer ${hiddenCount} org`
+                        : `Voir ${hiddenCount} masquees`}
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => {
+                      fetchOrganizations();
+                      fetchStats();
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Actualiser
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {allOrgs.length === 0 ? (
+              {visibleOrgs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   Aucune organisation trouvée
                 </div>
@@ -398,10 +433,13 @@ export default function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allOrgs.map((org) => (
-                      <TableRow key={org.id}>
+                    {visibleOrgs.map((org) => (
+                      <TableRow key={org.id} className={org.hidden ? "opacity-50" : ""}>
                         <TableCell className="font-medium">
                           {org.display_name || org.name}
+                          {org.hidden && (
+                            <span className="ml-2 text-xs text-gray-400">(masquee)</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-gray-600 dark:text-gray-400">
                           {org.instance_url || "-"}
@@ -442,10 +480,20 @@ export default function DashboardPage() {
                               ? "Mensuel"
                               : "-"}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-gray-400 hover:text-gray-600"
+                            onClick={() =>
+                              toggleHidden(org.id, !org.hidden)
+                            }
+                          >
+                            {org.hidden ? "Afficher" : "Masquer"}
+                          </Button>
                           <Button variant="link" asChild>
                             <a href={`/dashboard/organizations/${org.id}`}>
-                              Voir détails
+                              Details
                             </a>
                           </Button>
                         </TableCell>
