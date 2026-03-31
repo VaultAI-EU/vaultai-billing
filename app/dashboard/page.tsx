@@ -153,6 +153,23 @@ export default function DashboardPage() {
 
   const hiddenCount = allOrgs.filter((o) => o.hidden).length;
 
+  // Grouper les orgs visibles par instance_url
+  const instanceGroups = visibleOrgs.reduce<
+    Record<string, Organization[]>
+  >((acc, org) => {
+    const key = org.instance_url || "unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(org);
+    return acc;
+  }, {});
+
+  // Trier : instances connues d'abord, "unknown" à la fin
+  const sortedInstances = Object.entries(instanceGroups).sort(([a], [b]) => {
+    if (a === "unknown") return 1;
+    if (b === "unknown") return -1;
+    return a.localeCompare(b);
+  });
+
   const toggleHidden = async (orgId: string, hidden: boolean) => {
     try {
       await fetch(`/api/admin/organizations/${orgId}/hidden`, {
@@ -384,9 +401,9 @@ export default function DashboardPage() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Organisations</CardTitle>
+                  <CardTitle>Instances & Organisations</CardTitle>
                   <CardDescription>
-                    Liste de toutes les organisations et leur statut
+                    Groupees par instance — {sortedInstances.length} instance{sortedInstances.length > 1 ? "s" : ""}, {visibleOrgs.length} organisation{visibleOrgs.length > 1 ? "s" : ""}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -416,91 +433,113 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {visibleOrgs.length === 0 ? (
+              {sortedInstances.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  Aucune organisation trouvée
+                  Aucune organisation trouvee
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Instance</TableHead>
-                      <TableHead>Stripe</TableHead>
-                      <TableHead>Abonnement</TableHead>
-                      <TableHead>Facturation</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleOrgs.map((org) => (
-                      <TableRow key={org.id} className={org.hidden ? "opacity-50" : ""}>
-                        <TableCell className="font-medium">
-                          {org.display_name || org.name}
-                          {org.hidden && (
-                            <span className="ml-2 text-xs text-gray-400">(masquee)</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-gray-600 dark:text-gray-400">
-                          {org.instance_url || "-"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              org.stripe_customer_id ? "default" : "secondary"
-                            }
-                            className={
-                              org.stripe_customer_id
-                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                            }
-                          >
-                            {org.stripe_customer_id ? "Liee" : "En attente"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              org.subscription_status === "active"
-                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                : org.subscription_status === "trial"
-                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                                  : org.subscription_status === "past_due"
-                                    ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                                    : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                            }
-                          >
-                            {org.subscription_status || "pending"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-gray-600 dark:text-gray-400">
-                          {org.billing_period === "yearly"
-                            ? "Annuel"
-                            : org.billing_period === "monthly"
-                              ? "Mensuel"
-                              : "-"}
-                        </TableCell>
-                        <TableCell className="text-right flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs text-gray-400 hover:text-gray-600"
-                            onClick={() =>
-                              toggleHidden(org.id, !org.hidden)
-                            }
-                          >
-                            {org.hidden ? "Afficher" : "Masquer"}
-                          </Button>
-                          <Button variant="link" asChild>
-                            <a href={`/dashboard/organizations/${org.id}`}>
-                              Details
+                <div className="space-y-6">
+                  {sortedInstances.map(([instanceUrl, orgs]) => (
+                    <div key={instanceUrl} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                      {/* Instance header */}
+                      <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Activity className="h-4 w-4 text-gray-500" />
+                          {instanceUrl !== "unknown" ? (
+                            <a
+                              href={instanceUrl.startsWith("http") ? instanceUrl : `https://${instanceUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              {instanceUrl}
                             </a>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                          ) : (
+                            <span className="font-medium text-gray-400">URL inconnue</span>
+                          )}
+                          <Badge variant="outline" className="text-xs">
+                            {orgs.length} org{orgs.length > 1 ? "s" : ""}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Orgs table */}
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Organisation</TableHead>
+                            <TableHead>Stripe</TableHead>
+                            <TableHead>Abonnement</TableHead>
+                            <TableHead>Facturation</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {orgs.map((org) => (
+                            <TableRow key={org.id} className={org.hidden ? "opacity-50" : ""}>
+                              <TableCell className="font-medium">
+                                {org.display_name || org.name}
+                                {org.hidden && (
+                                  <span className="ml-2 text-xs text-gray-400">(masquee)</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  className={
+                                    org.stripe_customer_id
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                                  }
+                                >
+                                  {org.stripe_customer_id ? "Liee" : "En attente"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  className={
+                                    org.subscription_status === "active"
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                      : org.subscription_status === "trial"
+                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                        : org.subscription_status === "past_due"
+                                          ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                          : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                                  }
+                                >
+                                  {org.subscription_status || "pending"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-gray-600 dark:text-gray-400">
+                                {org.billing_period === "yearly"
+                                  ? "Annuel"
+                                  : org.billing_period === "monthly"
+                                    ? "Mensuel"
+                                    : "-"}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs text-gray-400 hover:text-gray-600"
+                                    onClick={() => toggleHidden(org.id, !org.hidden)}
+                                  >
+                                    {org.hidden ? "Afficher" : "Masquer"}
+                                  </Button>
+                                  <Button variant="link" size="sm" asChild>
+                                    <a href={`/dashboard/organizations/${org.id}`}>
+                                      Details
+                                    </a>
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
