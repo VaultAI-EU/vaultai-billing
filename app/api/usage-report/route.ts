@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, organizations, usageReports } from "@/lib/db";
+import { db, organizations, usageReports, healthReports } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { authenticateRequest } from "@/lib/config";
 import { stripe } from "@/lib/stripe";
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       organization_name,
       instance_url,
       user_count,
+      health,
       timestamp,
     } = body;
 
@@ -151,12 +152,38 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Usage Report] ✅ Report saved for ${organization_name}: ${user_count} users`);
 
+    // Enregistrer le rapport de santé si présent dans le payload
+    if (health && typeof health === "object") {
+      try {
+        const heapUsed = Number(health.memory_heap_used_mb) || 0;
+        const status = heapUsed > 1400 ? "unhealthy" : heapUsed > 1000 ? "warning" : "healthy";
+
+        await db.insert(healthReports).values({
+          organization_id,
+          memory_rss_mb: Number(health.memory_rss_mb) || 0,
+          memory_heap_used_mb: heapUsed,
+          memory_heap_total_mb: Number(health.memory_heap_total_mb) || 0,
+          memory_external_mb: Number(health.memory_external_mb) || 0,
+          cpu_user_percent: health.cpu_user_percent != null ? Math.round(Number(health.cpu_user_percent)) : null,
+          cpu_system_percent: health.cpu_system_percent != null ? Math.round(Number(health.cpu_system_percent)) : null,
+          uptime_seconds: Number(health.uptime_seconds) || 0,
+          node_version: health.node_version || null,
+          status,
+          reported_at: timestamp ? new Date(timestamp) : new Date(),
+        });
+
+        console.log(`[Usage Report] 🏥 Health report saved: ${status} (heap: ${heapUsed}MB)`);
+      } catch (healthError) {
+        console.error("[Usage Report] Failed to save health report (non-blocking):", healthError);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Usage report received",
       report_id: report.id,
-      organization_status: existingOrg ? 
-        (existingOrg.stripe_customer_id ? "linked" : "pending") : 
+      organization_status: existingOrg ?
+        (existingOrg.stripe_customer_id ? "linked" : "pending") :
         "pending",
     });
   } catch (error) {

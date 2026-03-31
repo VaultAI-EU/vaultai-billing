@@ -130,6 +130,27 @@ export const usageReports = pgTable("usage_reports", {
 export type UsageReport = typeof usageReports.$inferSelect;
 export type NewUsageReport = typeof usageReports.$inferInsert;
 
+// Table pour stocker les rapports de santé des instances
+export const healthReports = pgTable("health_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  memory_rss_mb: integer("memory_rss_mb").notNull(),
+  memory_heap_used_mb: integer("memory_heap_used_mb").notNull(),
+  memory_heap_total_mb: integer("memory_heap_total_mb").notNull(),
+  memory_external_mb: integer("memory_external_mb").notNull(),
+  cpu_user_percent: integer("cpu_user_percent"), // Average CPU user % since process start
+  cpu_system_percent: integer("cpu_system_percent"), // Average CPU system % since process start
+  uptime_seconds: integer("uptime_seconds").notNull(),
+  node_version: varchar("node_version", { length: 30 }),
+  status: varchar("status", { length: 20 }).notNull().default("healthy"),
+  reported_at: timestamp("reported_at").defaultNow().notNull(),
+});
+
+export type HealthReport = typeof healthReports.$inferSelect;
+export type NewHealthReport = typeof healthReports.$inferInsert;
+
 // Relations Better Auth
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
@@ -153,11 +174,19 @@ export const accountRelations = relations(account, ({ one }) => ({
 // Relations
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   usageReports: many(usageReports),
+  healthReports: many(healthReports),
 }));
 
 export const usageReportsRelations = relations(usageReports, ({ one }) => ({
   organization: one(organizations, {
     fields: [usageReports.organization_id],
+    references: [organizations.id],
+  }),
+}));
+
+export const healthReportsRelations = relations(healthReports, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [healthReports.organization_id],
     references: [organizations.id],
   }),
 }));

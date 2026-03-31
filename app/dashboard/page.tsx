@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Euro, Users, TrendingUp } from "lucide-react";
+import { RefreshCw, Euro, Users, TrendingUp, Activity } from "lucide-react";
 
 type Organization = {
   id: string;
@@ -154,6 +154,12 @@ export default function DashboardPage() {
               Dashboard Billing
             </h1>
             <div className="flex items-center gap-4">
+              <Button variant="outline" size="sm" asChild>
+                <a href="/dashboard/health">
+                  <Activity className="h-4 w-4 mr-1" />
+                  Monitoring
+                </a>
+              </Button>
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 {session.user.email}
               </span>
@@ -334,31 +340,14 @@ export default function DashboardPage() {
             </Card>
           )}
 
-          {/* Cartes d'organisations */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-base">Liées à Stripe</CardTitle>
-                <CardDescription>Organisations configurées</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                  {orgsData?.summary.linked || 0}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-base">En attente</CardTitle>
-                <CardDescription>À configurer</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {orgsData?.summary.pending || 0}
-                </p>
-              </CardContent>
-            </Card>
+          {/* Statut organisations */}
+          <div className="flex gap-3 mb-8">
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-sm px-3 py-1">
+              {orgsData?.summary.linked || 0} liées à Stripe
+            </Badge>
+            <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 text-sm px-3 py-1">
+              {orgsData?.summary.pending || 0} en attente
+            </Badge>
           </div>
 
           {error && (
@@ -402,7 +391,8 @@ export default function DashboardPage() {
                     <TableRow>
                       <TableHead>Nom</TableHead>
                       <TableHead>Instance</TableHead>
-                      <TableHead>Statut</TableHead>
+                      <TableHead>Stripe</TableHead>
+                      <TableHead>Abonnement</TableHead>
                       <TableHead>Facturation</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -427,7 +417,22 @@ export default function DashboardPage() {
                                 : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
                             }
                           >
-                            {org.stripe_customer_id ? "Liée" : "En attente"}
+                            {org.stripe_customer_id ? "Liee" : "En attente"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              org.subscription_status === "active"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                : org.subscription_status === "trial"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                  : org.subscription_status === "past_due"
+                                    ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                    : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                            }
+                          >
+                            {org.subscription_status || "pending"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-gray-600 dark:text-gray-400">
