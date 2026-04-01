@@ -171,13 +171,16 @@ export async function POST(request: NextRequest) {
 
         if (!recent) {
           const heapUsed = Number(health.memory_heap_used_mb) || 0;
-          const status = heapUsed > 1400 ? "unhealthy" : heapUsed > 1000 ? "warning" : "healthy";
+          const heapLimit = Number(health.memory_heap_limit_mb) || 3072; // fallback 3GB
+          const heapPercent = (heapUsed / heapLimit) * 100;
+          const status = heapPercent > 90 ? "unhealthy" : heapPercent > 70 ? "warning" : "healthy";
 
           await db.insert(healthReports).values({
             instance_url,
             memory_rss_mb: Number(health.memory_rss_mb) || 0,
             memory_heap_used_mb: heapUsed,
             memory_heap_total_mb: Number(health.memory_heap_total_mb) || 0,
+            memory_heap_limit_mb: health.memory_heap_limit_mb != null ? Number(health.memory_heap_limit_mb) : null,
             memory_external_mb: Number(health.memory_external_mb) || 0,
             cpu_user_percent: health.cpu_user_percent != null ? Math.round(Number(health.cpu_user_percent)) : null,
             cpu_system_percent: health.cpu_system_percent != null ? Math.round(Number(health.cpu_system_percent)) : null,

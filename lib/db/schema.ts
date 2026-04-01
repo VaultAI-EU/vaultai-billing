@@ -141,6 +141,7 @@ export const healthReports = pgTable("health_reports", {
   memory_rss_mb: integer("memory_rss_mb").notNull(),
   memory_heap_used_mb: integer("memory_heap_used_mb").notNull(),
   memory_heap_total_mb: integer("memory_heap_total_mb").notNull(),
+  memory_heap_limit_mb: integer("memory_heap_limit_mb"),
   memory_external_mb: integer("memory_external_mb").notNull(),
   cpu_user_percent: integer("cpu_user_percent"),
   cpu_system_percent: integer("cpu_system_percent"),

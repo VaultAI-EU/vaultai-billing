@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
           memory_rss_mb: latest?.memory_rss_mb ?? null,
           memory_heap_used_mb: latest?.memory_heap_used_mb ?? null,
           memory_heap_total_mb: latest?.memory_heap_total_mb ?? null,
+          memory_heap_limit_mb: latest?.memory_heap_limit_mb ?? null,
           memory_external_mb: latest?.memory_external_mb ?? null,
           cpu_user_percent: latest?.cpu_user_percent ?? null,
           cpu_system_percent: latest?.cpu_system_percent ?? null,

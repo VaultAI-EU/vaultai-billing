@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         memory_rss_mb: healthReports.memory_rss_mb,
         memory_heap_used_mb: healthReports.memory_heap_used_mb,
         memory_heap_total_mb: healthReports.memory_heap_total_mb,
+        memory_heap_limit_mb: healthReports.memory_heap_limit_mb,
         memory_external_mb: healthReports.memory_external_mb,
         cpu_user_percent: healthReports.cpu_user_percent,
         cpu_system_percent: healthReports.cpu_system_percent,

@@ -44,6 +44,7 @@ import {
   Legend,
   Area,
   AreaChart,
+  ReferenceLine,
 } from "recharts";
 
 // ─── Types ────────────────────────────────────────────────
@@ -62,6 +63,7 @@ type HealthInstance = {
   memory_rss_mb: number | null;
   memory_heap_used_mb: number | null;
   memory_heap_total_mb: number | null;
+  memory_heap_limit_mb: number | null;
   memory_external_mb: number | null;
   cpu_user_percent: number | null;
   cpu_system_percent: number | null;
@@ -89,6 +91,7 @@ type HealthReport = {
   memory_rss_mb: number;
   memory_heap_used_mb: number;
   memory_heap_total_mb: number;
+  memory_heap_limit_mb: number | null;
   cpu_user_percent: number | null;
   cpu_system_percent: number | null;
   uptime_seconds: number;
@@ -242,6 +245,7 @@ function InstanceGraphs({ instanceUrl }: { instanceUrl: string }) {
     fullTime: new Date(r.reported_at).toLocaleString("fr-FR"),
     heap_used: r.memory_heap_used_mb,
     heap_total: r.memory_heap_total_mb,
+    heap_limit: r.memory_heap_limit_mb,
     rss: r.memory_rss_mb,
     cpu_user: r.cpu_user_percent ?? 0,
     cpu_system: r.cpu_system_percent ?? 0,
@@ -302,7 +306,9 @@ function InstanceGraphs({ instanceUrl }: { instanceUrl: string }) {
                       ? "RSS"
                       : name === "heap_used"
                         ? "Heap utilise"
-                        : "Heap total",
+                        : name === "heap_total"
+                          ? "Heap alloue"
+                          : "Limite V8",
                   ]}
                 />
                 <Legend
@@ -312,9 +318,20 @@ function InstanceGraphs({ instanceUrl }: { instanceUrl: string }) {
                       ? "RSS"
                       : value === "heap_used"
                         ? "Heap utilise"
-                        : "Heap total"
+                        : value === "heap_total"
+                          ? "Heap alloue"
+                          : "Limite V8"
                   }
                 />
+                {chartData[0]?.heap_limit && (
+                  <ReferenceLine
+                    y={chartData[0].heap_limit}
+                    stroke="#ef4444"
+                    strokeDasharray="8 4"
+                    strokeWidth={1.5}
+                    label={{ value: `Limite: ${chartData[0].heap_limit} MB`, position: "right", fontSize: 10, fill: "#ef4444" }}
+                  />
+                )}
                 <Area
                   type="monotone"
                   dataKey="heap_total"
@@ -755,7 +772,7 @@ export default function HealthDashboardPage() {
                           <TableCell>
                             <MemoryBar
                               used={instance.memory_heap_used_mb}
-                              total={instance.memory_heap_total_mb}
+                              total={instance.memory_heap_limit_mb}
                             />
                           </TableCell>
                           <TableCell className="text-sm">
